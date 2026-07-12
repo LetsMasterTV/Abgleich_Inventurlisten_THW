@@ -7,12 +7,59 @@
 
 import SwiftUI
 
-struct SwiftUIView: View {
+struct DiffView: View {
+    let diff: XLSXDiff
+
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        List {
+            if !diff.added.isEmpty {
+                Section("Neu (\(diff.added.count))") {
+                    ForEach(diff.added.sorted { $0.Sachnummer < $1.Sachnummer }) { objekt in
+                        BestandsobjektRow(objekt: objekt)
+                            .listRowBackground(Color.green.opacity(0.08))
+                    }
+                }
+            }
+
+            if !diff.removed.isEmpty {
+                Section("Entfernt (\(diff.removed.count))") {
+                    ForEach(diff.removed.sorted { $0.Sachnummer < $1.Sachnummer }) { objekt in
+                        BestandsobjektRow(objekt: objekt)
+                            .listRowBackground(Color.red.opacity(0.08))
+                    }
+                }
+            }
+
+            if !diff.modified.isEmpty {
+                Section("Geändert (\(diff.modified.count))") {
+                    ForEach(diff.modified.sorted { $0.new.Sachnummer < $1.new.Sachnummer }, id: \.new.id) { change in
+                        BestandsobjektRow(objekt: change.new, highlightedFields: Set(change.changedFields))
+                            .listRowBackground(Color.orange.opacity(0.08))
+                    }
+                }
+            }
+
+            if !diff.unchanged.isEmpty {
+                Section {
+                    NavigationLink {
+                        UnchangedListView(items: diff.unchanged)
+                    } label: {
+                        Label("Unveränderte Einträge anzeigen (\(diff.unchanged.count))", systemImage: "checkmark.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if !diff.hasChanges {
+                Text("Keine Unterschiede gefunden")
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
-
+ 
+// MARK: - Preview
+ 
 #Preview {
-    SwiftUIView()
+    ContentView()
 }
