@@ -97,7 +97,7 @@ jobs:
 
           ditto -c -k --sequesterRsrc --keepParent \
             "${{ steps.app.outputs.app }}" \
-            "release/${{ steps.app.outputs.name }}-Build-${{ github.run_number }}.zip"
+            "release/${{ steps.app.outputs.name }}-V 1.0.-${{ github.run_number }}.zip"
 
       - name: Install create-dmg
         run: |
@@ -112,7 +112,7 @@ jobs:
             --window-size 800 450 \
             --icon-size 120 \
             --app-drop-link 600 220 \
-            "release/${{ steps.app.outputs.name }}-Build-${{ github.run_number }}.dmg" \
+            "release/${{ steps.app.outputs.name }}-V 1.0.-${{ github.run_number }}.dmg" \
             "${{ steps.app.outputs.app }}"
 
       - name: Upload Artifacts
@@ -127,7 +127,7 @@ jobs:
           tag_name: latest
           name: "Latest Build (${{ github.run_number }})"
           body: |
-            ## Automatisch erzeugter Build
+            ## Aktuelle Version von Abgleich Inventurlisten THW
 
             **Build:** ${{ github.run_number }}
 
@@ -140,3 +140,17 @@ jobs:
           files: |
             release/*.zip
             release/*.dmg
+
+      - name: Delete Old Artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: macOS-Build-*
+          failOnError: false
+
+      - name: Delete Older Releases
+        uses: dev-drprasad/delete-older-releases@v0.3.3
+        with:
+          keep_latest: 1
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
