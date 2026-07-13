@@ -98,7 +98,7 @@ Beschreibung, Sachnummer, Inventarnummer, Geraetenummer, Status
 
 ## Wie Zeilen einander zugeordnet werden
 
-Jeder Eintrag bekommt einen Schlüssel aus **Inventarnummer + Sachnummer**. Zwei Zeilen mit identischem Schlüssel gelten als "derselbe" Gegenstand über beide Dateien hinweg.
+Jeder Eintrag bekommt einen Schlüssel aus **Inventarnummer + Sachnummer**. Zwei Zeilen mit identischem Schlüssel gelten als "derselbe" Gegenstand über beide Dateien hinweg. 
 
 **Einschränkung:** Fehlt bei mehreren Zeilen sowohl die Inventarnummer als auch eine eindeutige Sachnummer (z. B. mehrere baugleiche Ersatzteile ohne individuelle Kennzeichnung), können diese Zeilen nicht hundertprozentig zuverlässig einander zugeordnet werden. Die App erkennt solche Fälle und nummeriert sie durch, statt abzustürzen – die Zuordnung kann in diesen Sonderfällen aber von der Position in der Datei abhängen.
 
