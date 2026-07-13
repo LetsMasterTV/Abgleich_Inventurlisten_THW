@@ -33,7 +33,7 @@ struct DiffView: View {
             if !diff.modified.isEmpty {
                 Section("Geändert (\(diff.modified.count))") {
                     ForEach(diff.modified.sorted { $0.new.Sachnummer < $1.new.Sachnummer }, id: \.new.id) { change in
-                        BestandsobjektRow(objekt: change.new, highlightedFields: Set(change.changedFields))
+                        ModifiedBestandsobjektRow(old: change.alt, new: change.new)
                             .listRowBackground(Color.orange.opacity(0.08))
                     }
                 }
@@ -44,7 +44,7 @@ struct DiffView: View {
                     NavigationLink {
                         UnchangedListView(items: diff.unchanged)
                     } label: {
-                        Label("Unveränderte Einträge anzeigen (\(diff.unchanged.count))", systemImage: "checkmark.circle")
+                        Label("Unveränderte Einträge anzeigen (\(diff.unchanged.count))", systemImage: "arrow.right")
                             .foregroundStyle(.secondary)
                     }
                 }

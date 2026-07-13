@@ -5,6 +5,10 @@
 //  Created by Kai Sebastian Bühner on 12.07.2026.
 //
 
+/**
+ 
+ */
+
 import UniformTypeIdentifiers
 
 extension UTType {

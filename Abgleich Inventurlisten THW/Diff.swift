@@ -8,7 +8,7 @@
 struct XLSXDiff {
     let added: [Bestandsobjekt]
     let removed: [Bestandsobjekt]
-    let modified: [(alt: Bestandsobjekt, new: Bestandsobjekt, changedFields: [String])]
+    let modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)]
     let unchanged: [Bestandsobjekt]
     
     var hasChanges: Bool {

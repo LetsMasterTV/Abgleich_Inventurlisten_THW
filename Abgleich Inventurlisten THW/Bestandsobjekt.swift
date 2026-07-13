@@ -55,3 +55,36 @@ struct Bestandsobjekt: Identifiable, Equatable {
         self.Status = (dict["Status"] ?? "").trimmingCharacters(in: .whitespaces)
     }
 }
+
+extension Bestandsobjekt {
+    struct FieldChange: Identifiable {
+        let id = UUID()
+        let label: String
+        let oldValue: String
+        let newValue: String
+    }
+
+    static func fieldChanges(from old: Bestandsobjekt, to new: Bestandsobjekt) -> [FieldChange] {
+        var changes: [FieldChange] = []
+
+        func compare(_ label: String, _ oldValue: String, _ newValue: String) {
+            if oldValue != newValue {
+                changes.append(FieldChange(label: label, oldValue: oldValue, newValue: newValue))
+            }
+        }
+
+        compare("Ebene", old.Ebene, new.Ebene)
+        compare("Art", old.Art, new.Art)
+        compare("STAN soll", old.STAN_soll, new.STAN_soll)
+        compare("Menge Ist", old.Menge_ist, new.Menge_ist)
+        compare("THWin Bestand", old.THWin_Bestand, new.THWin_Bestand)
+        compare("Bestand Fahrzeug", old.Fahrzeug_Bestand, new.Fahrzeug_Bestand)
+        compare("Beschreibung", old.Beschreibung, new.Beschreibung)
+        compare("Sachnummer", old.Sachnummer, new.Sachnummer)
+        compare("Inventarnummer", old.Inventarnummer, new.Inventarnummer)
+        compare("Gerätenummer", old.Geraetenummer, new.Geraetenummer)
+        compare("Status", old.Status, new.Status)
+
+        return changes
+    }
+}

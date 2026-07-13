@@ -39,16 +39,6 @@
 			path = "Abgleich Inventurlisten THW";
 			sourceTree = "<group>";
 		};
-		2A1C8C252FFD2F5E00B768A2 /* Abgleich Inventurlisten THWTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Abgleich Inventurlisten THWTests";
-			sourceTree = "<group>";
-		};
-		2A1C8C2F2FFD2F5F00B768A2 /* Abgleich Inventurlisten THWUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Abgleich Inventurlisten THWUITests";
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,8 +71,6 @@
 			isa = PBXGroup;
 			children = (
 				2A1C8C172FFD2F5A00B768A2 /* Abgleich Inventurlisten THW */,
-				2A1C8C252FFD2F5E00B768A2 /* Abgleich Inventurlisten THWTests */,
-				2A1C8C2F2FFD2F5F00B768A2 /* Abgleich Inventurlisten THWUITests */,
 				2A1C8C162FFD2F5A00B768A2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -136,9 +124,6 @@
 			dependencies = (
 				2A1C8C242FFD2F5E00B768A2 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				2A1C8C252FFD2F5E00B768A2 /* Abgleich Inventurlisten THWTests */,
-			);
 			name = "Abgleich Inventurlisten THWTests";
 			packageProductDependencies = (
 			);
@@ -158,9 +143,6 @@
 			);
 			dependencies = (
 				2A1C8C2E2FFD2F5F00B768A2 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				2A1C8C2F2FFD2F5F00B768A2 /* Abgleich Inventurlisten THWUITests */,
 			);
 			name = "Abgleich Inventurlisten THWUITests";
 			packageProductDependencies = (

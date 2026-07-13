@@ -125,34 +125,33 @@ struct Inventurliste {
     
 extension Inventurliste {
     func diff(against other: Inventurliste) -> XLSXDiff {
-        let (oldByKey, oldDuplicates) = Self.buildDictionary(from: self.inventurliste)
-        let (newByKey, newDuplicates) = Self.buildDictionary(from: other.inventurliste)
-
+        let (oldByKey, _) = Self.buildDictionary(from: self.inventurliste)
+        let (newByKey, _) = Self.buildDictionary(from: other.inventurliste)
+ 
         var added: [Bestandsobjekt] = []
-        var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt, changedFields: [String])] = []
+        var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)] = []
         var unchanged: [Bestandsobjekt] = []
-
+ 
         for (key, newProduct) in newByKey {
             if let oldProduct = oldByKey[key] {
                 if oldProduct == newProduct {
                     unchanged.append(newProduct)
                 } else {
-                    modified.append((alt: oldProduct, new: newProduct,
-                                      changedFields: Self.changedFields(old: oldProduct, new: newProduct)))
+                    modified.append((alt: oldProduct, new: newProduct))
                 }
             } else {
                 added.append(newProduct)
             }
         }
-
+ 
         var removed: [Bestandsobjekt] = []
         for (key, oldProduct) in oldByKey where newByKey[key] == nil {
             removed.append(oldProduct)
         }
-        
+ 
         return XLSXDiff(added: added, removed: removed, modified: modified, unchanged: unchanged)
     }
-
+    
     private static func buildDictionary(from items: [Bestandsobjekt]) -> (dict: [String: Bestandsobjekt], duplicates: Set<String>) {
         var dict: [String: Bestandsobjekt] = [:]
         var duplicates: Set<String> = []
@@ -173,21 +172,5 @@ extension Inventurliste {
             dict[uniqueKey] = item
         }
         return (dict, duplicates)
-    }
-
-    private static func changedFields(old: Bestandsobjekt, new: Bestandsobjekt) -> [String] {
-        var fields: [String] = []
-        if old.Ebene != new.Ebene { fields.append("Ebene") }
-        if old.Art != new.Art { fields.append("Art") }
-        if old.STAN_soll != new.STAN_soll { fields.append("STAN soll") }
-        if old.Menge_ist != new.Menge_ist { fields.append("Menge ist") }
-        if old.THWin_Bestand != new.THWin_Bestand { fields.append("THWin_Bestand") }
-        if old.Fahrzeug_Bestand != new.Fahrzeug_Bestand { fields.append("Fahrzeug Bestand") }
-        if old.Beschreibung != new.Beschreibung { fields.append("Beschreibung") }
-        if old.Sachnummer != new.Sachnummer { fields.append("Sachnummer") }
-        if old.Inventarnummer != new.Inventarnummer { fields.append("Inventarnummer") }
-        if old.Geraetenummer != new.Geraetenummer { fields.append("Gerätenummer") }
-        if old.Status != new.Status { fields.append("Status") }
-        return fields
     }
 }
