@@ -97,7 +97,7 @@ jobs:
 
           ditto -c -k --sequesterRsrc --keepParent \
             "${{ steps.app.outputs.app }}" \
-            "release/${{ steps.app.outputs.name }}-V 1.0.-${{ github.run_number }}.zip"
+            "release/${{ steps.app.outputs.name }}-V 1.0.${{ github.run_number }}.zip"
 
       - name: Install create-dmg
         run: |
@@ -112,7 +112,7 @@ jobs:
             --window-size 800 450 \
             --icon-size 120 \
             --app-drop-link 600 220 \
-            "release/${{ steps.app.outputs.name }}-V 1.0.-${{ github.run_number }}.dmg" \
+            "release/${{ steps.app.outputs.name }}-V 1.0.${{ github.run_number }}.dmg" \
             "${{ steps.app.outputs.app }}"
 
       - name: Upload Artifacts
@@ -128,6 +128,8 @@ jobs:
           name: "Latest Build (${{ github.run_number }})"
           body: |
             ## Aktuelle Version von Abgleich Inventurlisten THW
+
+            Hauptseite mit Anleitung: https://github.com/LetsMasterTV/Abgleich_Inventurlisten_THW
 
             **Build:** ${{ github.run_number }}
 
