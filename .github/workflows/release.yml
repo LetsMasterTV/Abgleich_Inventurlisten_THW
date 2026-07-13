@@ -1,0 +1,124 @@
+name: Build and Release macOS App
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode Version
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: Detect Project & Scheme
+        id: detect
+        shell: bash
+        run: |
+          PROJECT="Abgleich Inventurlisten THW.xcodeproj"
+
+          SCHEME=$(xcodebuild \
+            -project "$PROJECT" \
+            -list -json \
+            | ruby -rjson -e 'puts JSON.parse(STDIN.read)["project"]["schemes"][0]')
+
+          echo "project=$PROJECT" >> $GITHUB_OUTPUT
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+
+          echo "Projekt: $PROJECT"
+          echo "Scheme : $SCHEME"
+
+      - name: Build Release
+        shell: bash
+        run: |
+          rm -rf build
+
+          xcodebuild \
+            -project "${{ steps.detect.outputs.project }}" \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -configuration Release \
+            -sdk macosx \
+            -derivedDataPath build \
+            clean build
+
+      - name: Locate App
+        id: app
+        shell: bash
+        run: |
+          APP=$(find build -name "*.app" | head -1)
+
+          if [ -z "$APP" ]; then
+            echo "Keine .app gefunden!"
+            exit 1
+          fi
+
+          APP_NAME=$(basename "$APP" .app)
+
+          echo "app=$APP" >> $GITHUB_OUTPUT
+          echo "name=$APP_NAME" >> $GITHUB_OUTPUT
+
+          echo "Gefundene App:"
+          echo "$APP"
+
+      - name: Create ZIP
+        shell: bash
+        run: |
+          mkdir -p release
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ steps.app.outputs.app }}" \
+            "release/${{ steps.app.outputs.name }}-Build-${{ github.run_number }}.zip"
+
+      - name: Install create-dmg
+        run: |
+          brew update
+          brew install create-dmg
+
+      - name: Create DMG
+        shell: bash
+        run: |
+          create-dmg \
+            --volname "${{ steps.app.outputs.name }}" \
+            --window-pos 200 120 \
+            --window-size 800 450 \
+            --icon-size 120 \
+            --app-drop-link 600 220 \
+            "release/${{ steps.app.outputs.name }}-Build-${{ github.run_number }}.dmg" \
+            "${{ steps.app.outputs.app }}"
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZIP
+          path: release/*.zip
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: DMG
+          path: release/*.dmg
+
+      - name: Delete old Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest -y || true
+
+      - name: Create Latest Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create latest \
+            release/* \
+            --title "Latest Build #${{ github.run_number }}" \
+            --notes "Automatisch erzeugter Build."
