@@ -42,6 +42,7 @@ Gehe entsprechend der Spalte vor, die zu deiner heruntergeladenen Datei passt.
 ### 🔐 3. Sicherheitswarnung umgehen (Wichtig)
 
 Wenn du die App das erste Mal aus dem Programme-Ordner startest, zeigt macOS die Meldung: *„... kann nicht geöffnet werden, da es von einem nicht verifizierten Entwickler stammt“*.
+*Weil ich kein Bock hatte 100€ zu zahlen*
 
 So schaltest du die App frei:
 
