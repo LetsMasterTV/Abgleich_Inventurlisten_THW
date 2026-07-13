@@ -1,0 +1,220 @@
+name: Build & Release macOS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    env:
+      PROJECT: "Abgleich Inventurlisten THW.xcodeproj"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Environment
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: Cache Swift Packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: deriveddata-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
+
+      - name: Detect Scheme
+        id: detect
+        shell: bash
+        run: |
+          SCHEME=$(xcodebuild \
+            -project "$PROJECT" \
+            -list -json \
+            | ruby -rjson -e 'puts JSON.parse(STDIN.read)["project"]["schemes"][0]')
+
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: |
+          rm -rf build
+
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -configuration Release \
+            -sdk macosx \
+            -derivedDataPath build \
+            clean build
+
+      - name: Locate App
+        id: app
+        shell: bash
+        run: |
+          APP=$(find build -name "*.app" | head -1)
+
+          if [ -z "$APP" ]; then
+            echo "::error::Keine App gefunden."
+            exit 1
+          fi
+
+          NAME=$(basename "$APP" .app)
+
+          echo "app=$APP" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: Create ZIP
+        run: |
+          mkdir -p release
+
+          ditto -c -k --keepParent \
+            "${{ steps.app.outputs.app }}" \
+            "release/${{ steps.app.outputs.name }}-1.0.${{ github.run_number }}.zip"
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "${{ steps.app.outputs.name }}" \
+            --window-size 800 450 \
+            --icon-size 120 \
+            --app-drop-link 600 220 \
+            "release/${{ steps.app.outputs.name }}-1.0.${{ github.run_number }}.dmg" \
+            "${{ steps.app.outputs.app }}"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-Build-${{ github.run_number }}
+          path: release/*
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Build (1.0.${{ github.run_number }})"
+          body: |
+            ## Automatisch erzeugter Build
+
+            **Build:** ${{ github.run_number }}
+
+            **Commit:** ${{ github.sha }}
+
+            Dieser Release wird bei jedem Push auf `main` automatisch aktualisiert.
+          prerelease: true
+          make_latest: true
+          overwrite_files: true
+          files: |
+            release/*.zip
+            release/*.dmg
+          echo "Projekt: $PROJECT"
+          echo "Scheme : $SCHEME"
+
+      - name: Build Release
+        shell: bash
+        run: |
+          rm -rf build
+
+          xcodebuild \
+            -project "${{ steps.detect.outputs.project }}" \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -configuration Release \
+            -sdk macosx \
+            -derivedDataPath build \
+            clean build
+
+      - name: Locate App
+        id: app
+        shell: bash
+        run: |
+          APP=$(find build -name "*.app" | head -1)
+
+          if [ -z "$APP" ]; then
+            echo "Keine .app gefunden!"
+            exit 1
+          fi
+
+          APP_NAME=$(basename "$APP" .app)
+
+          echo "app=$APP" >> $GITHUB_OUTPUT
+          echo "name=$APP_NAME" >> $GITHUB_OUTPUT
+
+          echo "Gefundene App:"
+          echo "$APP"
+
+      - name: Create ZIP
+        shell: bash
+        run: |
+          mkdir -p release
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ steps.app.outputs.app }}" \
+            "release/${{ steps.app.outputs.name }}-Build-${{ github.run_number }}.zip"
+
+      - name: Install create-dmg
+        run: |
+          brew update
+          brew install create-dmg
+
+      - name: Create DMG
+        shell: bash
+        run: |
+          create-dmg \
+            --volname "${{ steps.app.outputs.name }}" \
+            --window-pos 200 120 \
+            --window-size 800 450 \
+            --icon-size 120 \
+            --app-drop-link 600 220 \
+            "release/${{ steps.app.outputs.name }}-Build-${{ github.run_number }}.dmg" \
+            "${{ steps.app.outputs.app }}"
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZIP
+          path: release/*.zip
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: DMG
+          path: release/*.dmg
+
+      - name: Delete old Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest -y || true
+
+      - name: Create Latest Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create latest \
+            release/* \
+            --title "Latest Build #${{ github.run_number }}" \
+            --notes "Automatisch erzeugter Build."
