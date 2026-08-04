@@ -78,14 +78,20 @@ struct DiffView: View {
                     }
                 }
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 4) {
+                        LazyVStack(alignment: .leading, spacing: 12) {
                             ForEach(displayedRoots) { root in
                                 TreeDisclosureView(node: root, expanded: $expanded) { node in
                                     AnyView(hierarchyRow(for: node))
                                 }
+                                
+                                Divider()
+                                    .padding(.vertical, 4)
+                                    .opacity(0.3)
                             }
                         }
                         .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        
                     }
                     .coordinateSpace(name: "scrollSpace") // Definierter Koordinatenraum für ScrollView
                     // Reagiert präzise auf Scroll-Positionen der sichtbaren Zeilen:

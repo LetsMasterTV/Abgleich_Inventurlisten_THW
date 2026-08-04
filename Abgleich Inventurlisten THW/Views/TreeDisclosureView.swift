@@ -32,6 +32,7 @@ struct TreeDisclosureView: View {
             } label: {
                 content(node)
             }
+            
         }
     }
 }

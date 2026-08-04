@@ -64,19 +64,18 @@ struct BestandsobjektRow: View {
                     .clipShape(Capsule())
             }
  
-            Text(objekt.Sachnummer)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
- 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 2) {
-                labeledField("Ebene", objekt.Ebene)
-                labeledField("Art", objekt.Art)
-                labeledField("STAN soll", objekt.STAN_soll)
-                labeledField("Menge Ist", objekt.Menge_ist)
-                labeledField("THWin Bestand", objekt.THWin_Bestand)
-                labeledField("Bestand Fahrzeug", objekt.Fahrzeug_Bestand)
-                labeledField("Inventarnummer", objekt.Inventarnummer)
-                labeledField("Gerätenummer", objekt.Geraetenummer)
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+                GridRow {
+                    labeledField("Ebene", objekt.Ebene)
+                    labeledField("Art", objekt.Art)
+                    labeledField("STAN soll", objekt.STAN_soll)
+                    labeledField("Menge Ist", objekt.Menge_ist)
+                    labeledField("THWin Bestand", objekt.THWin_Bestand)
+                    labeledField("Bestand Fahrzeug", objekt.Fahrzeug_Bestand)
+                    labeledField("Inventarnummer", objekt.Inventarnummer)
+                    labeledField("Sachnummer", objekt.Sachnummer)
+                    labeledField("Gerätenummer", objekt.Geraetenummer)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -84,7 +83,7 @@ struct BestandsobjektRow: View {
  
     @ViewBuilder
     private func labeledField(_ label: String, _ value: String) -> some View {
-        HStack(spacing: 4) {
+        VStack(alignment: .leading ,spacing: 4) {
             Text("\(label):")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
