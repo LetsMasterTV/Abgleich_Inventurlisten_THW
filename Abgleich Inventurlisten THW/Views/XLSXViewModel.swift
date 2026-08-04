@@ -50,101 +50,43 @@ import Foundation
 ///
 /// Example:
 /// - After selecting two XLSX files (old and new), call `load(data:as:)` for each. Bind your UI to `diff` to present changes and to `errorMessage` for error alerts.
+
+
 @Observable
 class XLSXViewModel {
     var oldDocument: Inventurliste?
     var newDocument: Inventurliste?
     var diff: XLSXDiff?
     var errorMessage: String?
- 
-    /// Loads XLSX data into the specified document slot and updates the model state.
-    ///
-    /// This method attempts to parse the provided XLSX `data` into an `Inventurliste`
-    /// and assigns it to the given `slot` (.old or .new). If parsing succeeds, the method
-    /// automatically triggers a recomputation of the `diff` if both the old and new
-    /// documents are available. If parsing fails, a user-presentable `errorMessage` is set.
-    ///
-    /// Behavior:
-    /// - Clears any existing `errorMessage` at the start of the operation.
-    /// - Parses XLSX data into an `Inventurliste`.
-    /// - Assigns the parsed document to the indicated `slot`.
-    /// - Recomputes `diff` when both documents are present.
-    /// - On failure, logs the error and sets `errorMessage` with a localized description.
-    ///
-    /// Threading:
-    /// - Intended to be called on the main actor within SwiftUI-driven flows, as it mutates
-    ///   observable state used by the UI.
-    ///
-    /// - Parameters:
-    ///   - data: The raw XLSX file contents to parse.
-    ///   - slot: The destination slot to populate, either `.old` (baseline) or `.new` (comparison).
-    ///
-    /// - Postconditions:
-    ///   - On success: `oldDocument` or `newDocument` is updated, and `diff` may be recomputed.
-    ///   - On failure: `errorMessage` contains a human-readable description of the parsing issue.
-    ///
-    /// - SeeAlso: `reset()`, `recomputeDiffIfPossible()`, `Inventurliste`, `XLSXDiff`
-    func load(data: Data, as slot: DocumentSlot) {
-        errorMessage = nil
-        print("▶️ load() aufgerufen für Slot: \(slot), Datengröße: \(data.count) Bytes")
-        do {
-            let document = try Inventurliste(data: data)
-            print("✅ \(document.inventurliste.count) Produkte")
-            switch slot {
-            case .old: oldDocument = document
-            case .new: newDocument = document
-            }
-            recomputeDiffIfPossible()
-        } catch {
-            print("❌ Parse-Fehler: \(error)")
-            errorMessage = "Fehler beim Parsen (\(slot)): \(error.localizedDescription)"
-        }
-    }
- 
+  
     enum DocumentSlot { case old, new }
  
-    /// Recomputes the diff between the currently loaded documents if both are available.
-    ///
-    /// Behavior:
-    /// - If both `oldDocument` and `newDocument` are non-nil, computes and assigns a new `XLSXDiff`
-    ///   by calling `oldDocument.diff(against: newDocument)`.
-    /// - If either document is missing, the method returns without modifying `diff`.
-    ///
-    /// Side Effects:
-    /// - Updates the observable `diff` property, triggering SwiftUI view updates.
-    ///
-    /// Threading:
-    /// - Intended to be called on the main actor as part of UI-driven workflows.
-    ///
-    /// Preconditions:
-    /// - `oldDocument` and `newDocument` should be successfully parsed `Inventurliste` instances.
-    ///
-    /// Postconditions:
-    /// - `diff` reflects the latest comparison of `oldDocument` vs `newDocument` when both are present;
-    ///   otherwise, `diff` remains unchanged.
-    ///
-    /// Usage:
-    /// - Automatically invoked by `load(data:as:)` after assigning a document slot.
-    /// - Can be called manually if either document is updated and a fresh diff is needed.
+    func load(data: Data, as slot: DocumentSlot) {
+           errorMessage = nil
+           do {
+               let document = try Inventurliste(data: data)
+               switch slot {
+               case .old: oldDocument = document
+               case .new: newDocument = document
+               }
+               recomputeDiffIfPossible()
+           } catch {
+               errorMessage = "Fehler beim Parsen: \(error.localizedDescription)"
+           }
+       }
+ 
+    /// Setzt den gesamten Zustand zurück auf den Ausgangswert
+    func reset() {
+        oldDocument = nil
+        newDocument = nil
+        diff = nil
+        errorMessage = nil
+    }
+ 
     private func recomputeDiffIfPossible() {
         guard let oldDocument, let newDocument else { return }
         diff = oldDocument.diff(against: newDocument)
     }
-    
-    /// Resets the view model to its initial state by clearing all loaded data and computed results.
-    ///
-    /// Calling this method:
-    /// - Sets `oldDocument` and `newDocument` to `nil`, removing any previously parsed inventories.
-    /// - Sets `diff` to `nil`, discarding any computed comparison between documents.
-    /// - Sets `errorMessage` to `nil`, clearing any prior error messages.
-    ///
-    /// Use this to start a fresh comparison workflow, for example when the user wants to load new files.
-    /// Intended to be called on the main actor within SwiftUI-driven flows so that UI updates occur safely.
-    func reset() {
-            oldDocument = nil
-            newDocument = nil
-            diff = nil
-            errorMessage = nil
-        }
 }
+
 

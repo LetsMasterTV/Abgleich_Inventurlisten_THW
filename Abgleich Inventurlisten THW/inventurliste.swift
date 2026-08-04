@@ -98,27 +98,28 @@ struct Inventurliste {
                     let allrows = worksheet.data?.rows ?? []
                     // Header auslesen
                     guard let headerows = allrows.first else { continue }
-
+                    
                     let headers = Self.extractHeaders(from: headerows, sharedStrings: sharedStrings)
-                    print("📋 Header in '\(sheetName ?? "?")': \(headers)")
-
+                    var rowCounter = 0
+                    
                     for row in allrows.dropFirst() {
+                        rowCounter += 1
                         var dict: [String: String] = [:]
                         for cell in row.cells {
                             guard let idx = Self.columnIndex(fromLetters: cell.reference.column.value),
                                   idx < headers.count else { continue }
                             let header = headers[idx]
                             guard !header.isEmpty else { continue }
-
-                            // Zellwert korrekt auflösen: erst Shared String versuchen, dann Inline-Text, dann Rohwert
+                            
+                            // Zellwert korrekt auflösen: Shared String zuerst, dann Inline-Text, dann Rohwert
                             let resolvedValue = cell.stringValue(sharedStrings)
-                                ?? cell.inlineString?.text
-                                ?? cell.value
-                                ?? ""
+                            ?? cell.inlineString?.text
+                            ?? cell.value
+                            ?? ""
                             dict[header] = resolvedValue
                         }
-                       
-                        if let objekt = Bestandsobjekt(from: dict) {
+                        
+                        if let objekt = Bestandsobjekt(from: dict, zeile: rowCounter) {
                             tmp.append(objekt)
                         }
                     }
@@ -204,7 +205,6 @@ struct Inventurliste {
     }
  }
     
-extension Inventurliste {
     /// Computes a detailed difference between this inventory list and another, classifying items as added, removed, modified, or unchanged.
     ///
     /// This method compares two Inventurliste instances by building unique, occurrence-aware keys for each Bestandsobjekt
@@ -226,33 +226,7 @@ extension Inventurliste {
     /// - Parameter other: The other Inventurliste to compare against (treated as the "new" list).
     /// - Returns: An `XLSXDiff` containing arrays of `added`, `removed`, `modified` (as `(alt:new:)` tuples), and `unchanged` items.
     /// - Note: The order within each result array reflects dictionary iteration order of the keyed collections and is not guaranteed to be stable.
-    func diff(against other: Inventurliste) -> XLSXDiff {
-        let (oldByKey, _) = Self.buildDictionary(from: self.inventurliste)
-        let (newByKey, _) = Self.buildDictionary(from: other.inventurliste)
  
-        var added: [Bestandsobjekt] = []
-        var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)] = []
-        var unchanged: [Bestandsobjekt] = []
- 
-        for (key, newProduct) in newByKey {
-            if let oldProduct = oldByKey[key] {
-                if oldProduct == newProduct {
-                    unchanged.append(newProduct)
-                } else {
-                    modified.append((alt: oldProduct, new: newProduct))
-                }
-            } else {
-                added.append(newProduct)
-            }
-        }
- 
-        var removed: [Bestandsobjekt] = []
-        for (key, oldProduct) in oldByKey where newByKey[key] == nil {
-            removed.append(oldProduct)
-        }
- 
-        return XLSXDiff(added: added, removed: removed, modified: modified, unchanged: unchanged)
-    }
     
     /// Builds a dictionary of Bestandsobjekt items keyed by a unique string while tracking duplicate base keys.
     ///
@@ -271,25 +245,179 @@ extension Inventurliste {
     /// - Returns: A tuple containing:
     ///   - dict: A dictionary mapping unique keys to their corresponding Bestandsobjekt.
     ///   - duplicates: A set of base keys that occurred more than once in the input.
-    private static func buildDictionary(from items: [Bestandsobjekt]) -> (dict: [String: Bestandsobjekt], duplicates: Set<String>) {
-        var dict: [String: Bestandsobjekt] = [:]
-        var duplicates: Set<String> = []
-        var seenCounts: [String: Int] = [:]
-
-        for item in items {
-            let baseKey = item.key
-            let occurrence = (seenCounts[baseKey] ?? 0) + 1
-            seenCounts[baseKey] = occurrence
-
-            // Erstes Vorkommen behält den normalen Key, ab dem zweiten wird ein Suffix angehängt
-            let uniqueKey = occurrence == 1 ? baseKey : "\(baseKey) #\(occurrence)"
-
-            if occurrence > 1 {
-                duplicates.insert(baseKey)
+    extension Inventurliste {
+        func diff(against other: Inventurliste) -> XLSXDiff {
+            let parentsOld = Self.computeParents(for: self.inventurliste)
+            let parentsNew = Self.computeParents(for: other.inventurliste)
+            
+            // Helfer zur Pfadgenerierung – wertet leere Ebenen als "0"
+            func generierePfadListe(aus elementen: [Bestandsobjekt], parents: [String: Bestandsobjekt]) -> [PfadElement] {
+                var ergebnis: [PfadElement] = []
+                
+                for item in elementen {
+                    // HIER: Wenn Ebene leer ist, wird sie als "0" gewertet
+                    let bereinigteEbene = item.Ebene.isEmpty ? "0" : (Int(item.Ebene) != nil ? item.Ebene : "0")
+                    
+                    var pfadTeile: [String] = ["[\(bereinigteEbene)] \(item.key)"]
+                    var currentParent = parents[item.key]
+                    
+                    while let parent = currentParent {
+                        let parentEbene = parent.Ebene.isEmpty ? "0" : (Int(parent.Ebene) != nil ? parent.Ebene : "0")
+                        pfadTeile.insert("[\(parentEbene)] \(parent.key)", at: 0)
+                        currentParent = parents[parent.key]
+                    }
+                    
+                    let vollerPfad = pfadTeile.joined(separator: "/")
+                    ergebnis.append(PfadElement(vollstaendigerPfad: vollerPfad, objekt: item))
+                }
+                return ergebnis
             }
-
-            dict[uniqueKey] = item
+            
+            let altePfade = generierePfadListe(aus: self.inventurliste, parents: parentsOld)
+            let neuePfade = generierePfadListe(aus: other.inventurliste, parents: parentsNew)
+            
+            func groupByFullPath(_ elements: [PfadElement]) -> [String: [Bestandsobjekt]] {
+                var dict: [String: [Bestandsobjekt]] = [:]
+                for el in elements {
+                    dict[el.vollstaendigerPfad, default: []].append(el.objekt)
+                }
+                for key in dict.keys {
+                    dict[key]?.sort { $0.Zeile < $1.Zeile }
+                }
+                return dict
+            }
+            
+            let oldGroups = groupByFullPath(altePfade)
+            let newGroups = groupByFullPath(neuePfade)
+            
+            var added: [Bestandsobjekt] = []
+            var removed: [Bestandsobjekt] = []
+            var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)] = []
+            var unchanged: [Bestandsobjekt] = []
+            
+            var oldDuplicates = Set<String>()
+            var newDuplicates = Set<String>()
+            
+            let allPaths = Set(oldGroups.keys).union(newGroups.keys)
+            
+            for pfad in allPaths {
+                let olds = oldGroups[pfad] ?? []
+                let news = newGroups[pfad] ?? []
+                
+                var matchedNewIndices = Set<Int>()
+                var matchedOldIndices = Set<Int>()
+                
+                for (oldIdx, oldItem) in olds.enumerated() {
+                    for (newIdx, newItem) in news.enumerated() {
+                        if !matchedNewIndices.contains(newIdx) && oldItem == newItem {
+                            unchanged.append(newItem)
+                            matchedOldIndices.insert(oldIdx)
+                            matchedNewIndices.insert(newIdx)
+                            break
+                        }
+                    }
+                }
+                
+                let remainingOlds = olds.enumerated().filter { !matchedOldIndices.contains($0.offset) }.map { $0.element }
+                let remainingNews = news.enumerated().filter { !matchedNewIndices.contains($0.offset) }.map { $0.element }
+                
+                let pairCount = min(remainingOlds.count, remainingNews.count)
+                
+                for i in 0..<pairCount {
+                    modified.append((alt: remainingOlds[i], new: remainingNews[i]))
+                }
+                
+                if remainingOlds.count > pairCount {
+                    removed.append(contentsOf: remainingOlds[pairCount...])
+                }
+                if remainingNews.count > pairCount {
+                    added.append(contentsOf: remainingNews[pairCount...])
+                }
+                
+                if remainingOlds.count > 1 { oldDuplicates.insert(pfad) }
+                if remainingNews.count > 1 { newDuplicates.insert(pfad) }
+            }
+            
+            return XLSXDiff(
+                added: added,
+                removed: removed,
+                modified: modified,
+                unchanged: unchanged,
+                duplicateKeysOld: oldDuplicates,
+                duplicateKeysNew: newDuplicates
+            )
         }
-        return (dict, duplicates)
+     
+        /// Baut ein Dictionary aus den Objekten und erkennt dabei doppelte Keys,
+        /// statt bei Kollisionen abzustürzen (wie Dictionary(uniqueKeysWithValues:) es täte).
+        /// Bei Duplikaten wird ein Zähl-Suffix angehängt, damit auch diese Zeilen einzeln verglichen werden.
+        private static func buildDictionary(from items: [Bestandsobjekt]) -> (dict: [String: Bestandsobjekt], duplicates: Set<String>) {
+            var dict: [String: Bestandsobjekt] = [:]
+            var duplicates: Set<String> = []
+            var seenCounts: [String: Int] = [:]
+     
+            for item in items {
+                let baseKey = item.key
+                let occurrence = (seenCounts[baseKey] ?? 0) + 1
+                seenCounts[baseKey] = occurrence
+     
+                let uniqueKey = occurrence == 1 ? baseKey : "\(baseKey) #\(occurrence)"
+                if occurrence > 1 {
+                    duplicates.insert(baseKey)
+                }
+                dict[uniqueKey] = item
+            }
+            return (dict, duplicates)
+        }
+    }
+
+
+
+extension Inventurliste {
+    /// Ermittelt für jedes Objekt in einer geordneten Liste (Original-Reihenfolge aus der Excel-Datei!)
+    /// das nächstgelegene VORHERIGE Objekt mit niedrigerer Ebene – dessen direktes "Elternteil".
+    static func computeParents(for items: [Bestandsobjekt]) -> [String: Bestandsobjekt] {
+        var result: [String: Bestandsobjekt] = [:]
+        var stack: [(level: Int, obj: Bestandsobjekt)] = []
+ 
+        for item in items {
+            let level = Int(item.Ebene) ?? 0
+            while let last = stack.last, last.level >= level {
+                stack.removeLast()
+            }
+            if let parent = stack.last {
+                result[item.key] = parent.obj
+            }
+            stack.append((level, item))
+        }
+        return result
     }
 }
+
+
+
+extension Inventurliste {
+    // Hilfsfunktion: Berechnet rekursiv die Pfade für die Pfad-Knoten-Zuweisung
+    private static func generierePfadListe(
+        aus elementen: [Bestandsobjekt],
+        parents: [String: Bestandsobjekt]
+    ) -> [PfadElement] {
+        var ergebnis: [PfadElement] = []
+        
+        for item in elementen {
+            var pfadTeile: [String] = [item.key]
+            var currentParent = parents[item.key]
+            
+            // Wandere den Baum nach oben, um den vollen Pfad zu bauen
+            while let parent = currentParent {
+                pfadTeile.insert(parent.key, at: 0)
+                currentParent = parents[parent.key]
+            }
+            
+            let vollerPfad = pfadTeile.joined(separator: "/")
+            ergebnis.append(PfadElement(vollstaendigerPfad: vollerPfad, objekt: item))
+        }
+        return ergebnis
+    }
+}
+

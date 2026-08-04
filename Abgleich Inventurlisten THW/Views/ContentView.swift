@@ -46,35 +46,13 @@ import UniformTypeIdentifiers
 ///   `loadFile` to use Swift concurrency for smoother UI responsiveness.
 struct ContentView: View {
     @State private var viewModel = XLSXViewModel()
-    
-    /// Parameter: to handle the FileImporter
     @State private var activeSlot: XLSXViewModel.DocumentSlot?
     @State private var lastRequestedSlot: XLSXViewModel.DocumentSlot?
-
-    /// Parameter :to Handle Pop up Overwriting Warning
+ 
+    // Bestätigungs-Popup beim Überschreiben eines bereits geladenen Slots
     @State private var showOverwriteConfirmation = false
     @State private var pendingSlot: XLSXViewModel.DocumentSlot?
-
-    /// A computed binding that drives the presentation of the system file importer.
-    ///
-    /// This binding maps the optional `activeSlot` state to a boolean that `.fileImporter`
-    /// can observe:
-    /// - get: Returns `true` when a document slot is active (non-nil), which presents the importer.
-    /// - set: When the importer is dismissed (`false`), it clears `activeSlot` to end presentation.
-    ///         Setting it to `true` has no effect here; presentation is triggered by assigning
-    ///         a non-nil slot to `activeSlot` elsewhere (e.g., in `requestFile(for:)`).
-    ///
-    /// Rationale:
-    /// SwiftUI’s `.fileImporter` requires a `Binding<Bool>` to manage presentation. Internally,
-    /// this view tracks which document slot (old/new) is being targeted via `activeSlot`.
-    /// By bridging the optional slot to a boolean, the importer is shown only when a slot
-    /// has been selected, and automatically dismissed/reset when the importer completes.
-    ///
-    /// Notes:
-    /// - The dismissal path intentionally clears `activeSlot` to avoid stale state and to
-    ///   ensure subsequent presentations work reliably.
-    /// - If the user cancels the importer, SwiftUI sets the binding to `false`, which
-    ///   also clears `activeSlot`.
+ 
     private var isImporterPresented: Binding<Bool> {
         Binding(
             get: { activeSlot != nil },
@@ -83,7 +61,7 @@ struct ContentView: View {
             }
         )
     }
-
+ 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -96,7 +74,7 @@ struct ContentView: View {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     }
                 }
-
+ 
                 HStack {
                     Button("Neue Datei wählen") {
                         requestFile(for: .new)
@@ -106,15 +84,19 @@ struct ContentView: View {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     }
                 }
-
+ 
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .foregroundStyle(.red)
                         .font(.caption)
                 }
-
+ 
                 if let diff = viewModel.diff {
-                    DiffView(diff: diff)
+                    DiffView(
+                        diff: diff,
+                        oldItems: viewModel.oldDocument?.inventurliste ?? [],
+                        newItems: viewModel.newDocument?.inventurliste ?? []
+                    )
                 } else {
                     Spacer()
                     Text("Bitte beide Dateien auswählen")
@@ -123,7 +105,7 @@ struct ContentView: View {
                 }
             }
             .padding()
-            .navigationTitle("Inventurlisten Vergleich")
+            .navigationTitle("XLSX Vergleich")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(role: .destructive) {
@@ -135,12 +117,10 @@ struct ContentView: View {
                 }
             }
         }
-        // MARK: File Importer
         .fileImporter(isPresented: isImporterPresented, allowedContentTypes: [.xlsx]) { result in
             guard let slot = activeSlot ?? lastRequestedSlot else { return }
             handle(result, as: slot)
         }
-        // MARK: POP-UP "Datei Überschreiben"
         .alert("Datei bereits geladen", isPresented: $showOverwriteConfirmation) {
             Button("Abbrechen", role: .cancel) {
                 pendingSlot = nil
@@ -156,12 +136,8 @@ struct ContentView: View {
             Text("Für diesen Slot ist bereits eine Datei geladen. Möchtest du sie durch eine neue ersetzen?")
         }
     }
-
-//---------------------------------------------------------------------------------------------------------------------
-    
-    /// Prüft, ob für den Slot schon eine Datei existiert, und fragt ggf. vorher nach
-    ///
-    ///
+ 
+    /// Prüft, ob für den Slot schon eine Datei existiert, und fragt ggf. vorher per Popup nach
     private func requestFile(for slot: XLSXViewModel.DocumentSlot) {
         let alreadyLoaded: Bool = {
             switch slot {
@@ -169,7 +145,7 @@ struct ContentView: View {
             case .new: return viewModel.newDocument != nil
             }
         }()
-
+ 
         if alreadyLoaded {
             pendingSlot = slot
             showOverwriteConfirmation = true
@@ -179,47 +155,30 @@ struct ContentView: View {
         }
     }
  
-//---------------------------------------------------------------------------------------------------------------------
-    
     private func handle(_ result: Result<URL, Error>, as slot: XLSXViewModel.DocumentSlot) {
         switch result {
         case .success(let url):
-            print("✅ handle(): Erfolg, URL = \(url)")
             loadFile(at: url, as: slot)
         case .failure(let error):
-            print("❌ handle(): fileImporter lieferte Fehler: \(error)")
             viewModel.errorMessage = error.localizedDescription
         }
     }
-    
-//---------------------------------------------------------------------------------------------------------------------
  
     private func loadFile(at url: URL, as slot: XLSXViewModel.DocumentSlot) {
-        print("📂 loadFile() gestartet für: \(url.lastPathComponent)")
         guard url.startAccessingSecurityScopedResource() else {
-            print("🚫 startAccessingSecurityScopedResource() lieferte FALSE – kein Zugriff!")
             viewModel.errorMessage = "Kein Zugriff auf die Datei"
             return
         }
-        print("🔓 Security-Scoped-Zugriff erfolgreich gestartet")
-        defer {
-            url.stopAccessingSecurityScopedResource()
-            print("🔒 Security-Scoped-Zugriff wieder freigegeben")
-        }
+        defer { url.stopAccessingSecurityScopedResource() }
  
         do {
             let data = try Data(contentsOf: url)
-            print("📄 Data(contentsOf:) erfolgreich, \(data.count) Bytes gelesen")
             viewModel.load(data: data, as: slot)
         } catch {
-            print("❌ Data(contentsOf:) fehlgeschlagen: \(error)")
             viewModel.errorMessage = "Fehler beim Lesen: \(error.localizedDescription)"
         }
     }
 }
-
-//---------------------------------------------------------------------------------------------------------------------
-
 
 #Preview {
     ContentView()

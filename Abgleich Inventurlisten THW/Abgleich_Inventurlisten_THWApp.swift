@@ -8,10 +8,19 @@
 import SwiftUI
 
 @main
-struct Abgleich_Inventurlisten_THWApp: App {
+struct THW_Inventur_Vergleichs_Assistent: App {
+    
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true // 'true' sorgt dafür, dass die App komplett schließt
     }
 }

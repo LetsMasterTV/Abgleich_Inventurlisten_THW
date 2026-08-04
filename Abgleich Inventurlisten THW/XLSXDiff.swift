@@ -38,9 +38,17 @@ struct XLSXDiff {
     let modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)]
     let unchanged: [Bestandsobjekt]
     
+    let duplicateKeysOld: Set<String>
+    let duplicateKeysNew: Set<String>
+    
     var hasChanges: Bool {
         !added.isEmpty || !removed.isEmpty || !modified.isEmpty
     }
+    
+    var hasDuplicateWarnings: Bool {
+            !duplicateKeysOld.isEmpty || !duplicateKeysNew.isEmpty
+        }
 }
+
 
 
