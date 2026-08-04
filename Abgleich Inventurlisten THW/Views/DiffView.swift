@@ -7,267 +7,318 @@
 
 import SwiftUI
 
-/// A SwiftUI view that presents a summarized, sectioned list of differences between two XLSX-based inventories.
-///
-/// DiffView renders the result of a comparison (diff) of inventory items into a user-friendly list:
-/// - Added items are shown in a "Neu" section with a light green background.
-/// - Removed items are shown in an "Entfernt" section with a light red background.
-/// - Modified items are shown in a "Geändert" section with a light orange background, displaying both old and new values.
-/// - Unchanged items are accessible via a navigation link to a dedicated list to keep the main view focused on changes.
-/// - If no differences exist, a secondary-styled message is shown.
-///
-/// The list content is grouped into sections only when the corresponding category is non-empty. Items within sections
-/// are sorted by their `Sachnummer` to ensure a stable, predictable ordering.
-///
-/// Requirements and assumptions:
-/// - `XLSXDiff` encapsulates the diff result and exposes:
-///   - `added`: a collection of newly added items
-///   - `removed`: a collection of removed items
-///   - `modified`: a collection of changes with `old`/`new` (or `alt`/`new`) values
-///   - `unchanged`: a collection of unchanged items
-///   - `hasChanges`: a Boolean indicating whether there are any differences
-/// - Inventory items conform to `Identifiable` and provide `Sachnummer` for sorting.
-/// - `BestandsobjektRow`, `ModifiedBestandsobjektRow`, and `UnchangedListView` are available to render row content.
-/// - This view is intended to be embedded in a `NavigationStack`/`NavigationView` to enable navigation to unchanged items.
-///
-/// Accessibility and styling:
-/// - Background tints use low-opacity system colors to maintain readability.
-/// - Section headers include localized German titles and counts for quick scanning.
-///
-/// - Parameter diff: The computed differences to display.
+// Marker für die Positionen im ScrollView-Koordinatensystem
+struct NodePositionData: Equatable {
+    let id: UUID
+    let minY: CGFloat
+}
+
+struct NodePositionPreferenceKey: PreferenceKey {
+    static var defaultValue: [NodePositionData] = []
+    
+    static func reduce(value: inout [NodePositionData], nextValue: () -> [NodePositionData]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
 struct DiffView: View {
     let diff: XLSXDiff
     let oldItems: [Bestandsobjekt]
     let newItems: [Bestandsobjekt]
- 
+    
     @State private var showUnchanged = false
     @State private var showDuplicateDetails = false
+    
     @State private var displayedRoots: [HierarchyNode] = []
     @State private var expanded: Set<UUID> = []
-
+    
+    // Breadcrumb-Pfad
+    @State private var breadcrumbParts: [String] = []
+    
     var body: some View {
         VStack(spacing: 0) {
-            // Bestehender Toggle + neue Buttons
+            // Header Controls
             HStack {
                 Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
                 Spacer()
-                Button("▼ Alle", action: expandAll) // Chevron down
+                Button("▼ Alle", action: expandAll)
                     .font(.caption2)
                     .padding(.horizontal, 4)
-                Button("▲ Keine", action: collapseAll) // Chevron up
+                Button("▲ Keine", action: collapseAll)
                     .font(.caption2)
                     .padding(.horizontal, 4)
             }
             .padding(.horizontal)
             .padding(.vertical, 6)
-
+            
             if diff.hasDuplicateWarnings {
                 duplicateWarningBanner
             }
-
+            
             if !diff.hasChanges && !showUnchanged {
                 Spacer()
                 Text("Keine Unterschiede gefunden")
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(displayedRoots) { root in
-                            TreeDisclosureView(node: root, expanded: $expanded) { node in
-                                AnyView(hierarchyRow(for: node))
+                // Sticky Breadcrumb Bar
+                if !breadcrumbParts.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Array(breadcrumbParts.enumerated()), id: \.offset) { index, part in
+                            if index > 0 {
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.tertiary)
                             }
+                            
+                            Text(part)
+                                .font(.caption.weight(index == breadcrumbParts.count - 1 ? .bold : .regular))
+                                .foregroundStyle(index == breadcrumbParts.count - 1 ? .primary : .secondary)
                         }
                     }
-                    .padding(.horizontal)
                 }
-                .onAppear {
-                    // Baue den Baum einmal und speichere ihn stable in @State
-                    let fullTree = buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
-                    displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
-                    expanded = computeInitialExpanded(for: displayedRoots)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(displayedRoots) { root in
+                                TreeDisclosureView(node: root, expanded: $expanded) { node in
+                                    AnyView(hierarchyRow(for: node))
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .coordinateSpace(name: "scrollSpace") // Definierter Koordinatenraum für ScrollView
+                    // Reagiert präzise auf Scroll-Positionen der sichtbaren Zeilen:
+                    .onPreferenceChange(NodePositionPreferenceKey.self) { positions in
+                        updateBreadcrumbFromPositions(positions)
+                    }
+                    .onAppear {
+                        rebuildTree()
+                    }
+                    .onChange(of: showUnchanged) { _, _ in
+                        rebuildTree()
+                    }
                 }
-                .onChange(of: showUnchanged) {
-                    // Wenn der Toggle "Unverändert einblenden" geändert wird, updaten
-                    let fullTree = buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
-                    displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
-                    expanded = computeInitialExpanded(for: displayedRoots)
+            }
+        }
+        
+        // MARK: - Tree Management
+        
+        private func rebuildTree() {
+            let fullTree = buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
+            displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
+            expanded = computeInitialExpanded(for: displayedRoots)
+            breadcrumbParts = []
+        }
+        
+        private func expandAll() {
+            var allIds: Set<UUID> = []
+            func collect(_ node: HierarchyNode) {
+                allIds.insert(node.id)
+                for child in node.children { collect(child) }
+            }
+            for root in displayedRoots { collect(root) }
+            expanded = allIds
+        }
+        
+        private func collapseAll() {
+            expanded.removeAll()
+        }
+        
+        private func computeInitialExpanded(for roots: [HierarchyNode]) -> Set<UUID> {
+            var toExpand: Set<UUID> = []
+            
+            func traverse(_ node: HierarchyNode) -> Bool {
+                var hasChange = false
+                switch node.status {
+                case .added, .removed, .modified:
+                    hasChange = true
+                case .unchanged:
+                    hasChange = false
+                }
+                for child in node.children {
+                    let childHas = traverse(child)
+                    if childHas { hasChange = true }
+                }
+                if hasChange {
+                    toExpand.insert(node.id)
+                }
+                return hasChange
+            }
+            
+            func markAncestors(_ node: HierarchyNode, ancestors: [HierarchyNode]) {
+                var thisHasChange = false
+                switch node.status {
+                case .added, .removed, .modified:
+                    thisHasChange = true
+                case .unchanged:
+                    break
+                }
+                for child in node.children {
+                    markAncestors(child, ancestors: ancestors + [node])
+                    if toExpand.contains(child.id) { thisHasChange = true }
+                }
+                if thisHasChange {
+                    for a in ancestors { toExpand.insert(a.id) }
+                    toExpand.insert(node.id)
                 }
             }
+            
+            for r in roots { traverse(r) }
+            for r in roots { markAncestors(r, ancestors: []) }
+            return toExpand
         }
-    }
-    
-    private func expandAll() {
-        // Sammle alle Node IDs rekursiv
-        var allIds: Set<UUID> = []
-        func collect(_ node: HierarchyNode) {
-            allIds.insert(node.id)
-            for child in node.children { collect(child) }
-        }
-        for root in displayedRoots { collect(root) }
-        expanded = allIds
-    }
-
-    private func collapseAll() {
-        expanded.removeAll()
-    }
-    
-    private func computeInitialExpanded(for roots: [HierarchyNode]) -> Set<UUID> {
-        var toExpand: Set<UUID> = []
-
-        // Markiere alle Ancestors und die Node selbst, wenn die Node oder ein Descendant Status != .unchanged hat
-        @discardableResult
-        func traverse(_ node: HierarchyNode) -> Bool {
-            var hasChange = false
-            switch node.status {
-            case .added, .removed, .modified:
-                hasChange = true
-            case .unchanged:
-                hasChange = false
-            }
-            for child in node.children {
-                let childHas = traverse(child)
-                if childHas { hasChange = true }
-            }
-            if hasChange {
-                // expand this node and all ancestors will be handled via recursion (we add only node here,
-                // ancestors will be added when upstream sees that their descendant had change)
-                toExpand.insert(node.id)
-            }
-            return hasChange
-        }
-
-        // We also want parents of changed nodes open, so propagate up:
-        func markAncestors(_ node: HierarchyNode, ancestors: [HierarchyNode]) {
-            var thisHasChange = false
-            switch node.status {
-            case .added, .removed, .modified:
-                thisHasChange = true
-            case .unchanged:
-                break
-            }
-            for child in node.children {
-                markAncestors(child, ancestors: ancestors + [node])
-                if toExpand.contains(child.id) { thisHasChange = true }
-            }
-            if thisHasChange {
-                for a in ancestors { toExpand.insert(a.id) }
-                toExpand.insert(node.id)
-            }
-        }
-
-        for r in roots { traverse(r) }
-        for r in roots { markAncestors(r, ancestors: []) }
-        return toExpand
-    }
- 
-    @ViewBuilder
-    private func hierarchyRow(for node: HierarchyNode) -> some View {
-        let ebenenInt = Int(node.objekt.Ebene) ?? 0
-        let ebeneEinrueckung = CGFloat(ebenenInt * 12)
         
-        // Eine Headline wird erkannt, wenn der Beschreibungstext leer ist
-        let istReineHeadline = node.objekt.Beschreibung.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // MARK: - Row Rendering
         
-        // Wir ermitteln die Farbe einmal sauber vorab über ein klares Switch-Statement
-        let aktuelleFarbe: Color = {
-            switch node.status {
-            case .added: return .green
-            case .removed: return .red
-            case .modified: return .orange
-            case .unchanged: return .primary
-            }
-        }()
-        
-        Group {
-            if istReineHeadline {
-                // --- OPTIONALE / MEHRFACHE REINE HEADLINE ---
-                HStack(spacing: 6) {
-                    // Unterscheidet optisch, ob der Ordner unverändert ist oder Änderungen enthält
-                    Image(systemName: "folder.fill")
-                        .font(.footnote)
-                        .foregroundColor(node.statusIsUnchanged ? .secondary : aktuelleFarbe)
+        @ViewBuilder
+        private func hierarchyRow(for node: HierarchyNode) -> some View {
+            let ebenenInt = Int(node.objekt.Ebene) ?? 0
+            let ebeneEinrueckung = CGFloat(ebenenInt * 12)
+            let istReineHeadline = node.objekt.Beschreibung.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            
+            let aktuelleFarbe: Color = {
+                switch node.status {
+                case .added: return .green
+                case .removed: return .red
+                case .modified: return .orange
+                case .unchanged: return .primary
+                }
+            }()
+            
+            Group {
+                if istReineHeadline {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.fill")
+                            .font(.footnote)
+                            .foregroundColor(node.statusIsUnchanged ? .secondary : aktuelleFarbe)
+                        
+                        Text(node.objekt.key.uppercased())
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(node.statusIsUnchanged ? .primary : aktuelleFarbe)
+                        
+                        switch node.status {
+                        case .added:
+                            Text("[NEUER ABSCHNITT]").font(.caption2).foregroundColor(.green)
+                        case .removed:
+                            Text("[ENTFERNT]").font(.caption2).foregroundColor(.red)
+                        case .modified:
+                            Text("[INHALT GEÄNDERT]").font(.caption2).foregroundColor(.orange)
+                        case .unchanged:
+                            EmptyView()
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.leading, ebeneEinrueckung)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(node.statusIsUnchanged ? Color.clear : aktuelleFarbe.opacity(0.10))
+                    .cornerRadius(4)
                     
-                    Text(node.objekt.key.uppercased())
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(node.statusIsUnchanged ? .primary : aktuelleFarbe)
-                    
-                    // Status-Zusatz im THW-Stil auswerten via Switch
+                } else {
                     switch node.status {
                     case .added:
-                        Text("[NEUER ABSCHNITT]").font(.caption2).foregroundColor(.green)
+                        BestandsobjektRow(objekt: node.objekt)
+                            .padding(.leading, ebeneEinrueckung)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(Color.green.opacity(0.18))
+                            .cornerRadius(4)
+                        
                     case .removed:
-                        Text("[ENTFERNT]").font(.caption2).foregroundColor(.red)
-                    case .modified:
-                        Text("[INHALT GEÄNDERT]").font(.caption2).foregroundColor(.orange)
+                        BestandsobjektRow(objekt: node.objekt)
+                            .padding(.leading, ebeneEinrueckung)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(Color.red.opacity(0.18))
+                            .cornerRadius(4)
+                            .opacity(0.8)
+                        
+                    case .modified(let old):
+                        ModifiedBestandsobjektRow(old: old, new: node.objekt)
+                            .padding(.leading, ebeneEinrueckung)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(Color.orange.opacity(0.18))
+                            .cornerRadius(4)
+                        
                     case .unchanged:
-                        EmptyView()
+                        BestandsobjektRow(objekt: node.objekt)
+                            .padding(.leading, ebeneEinrueckung)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .opacity(showUnchanged ? 1.0 : 0.55)
                     }
-                    
-                    Spacer()
-                }
-                .padding(.leading, ebeneEinrueckung)
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                // Fehler behoben: Nutzt jetzt die vorbereitete 'aktuelleFarbe'
-                .background(node.statusIsUnchanged ? Color.clear : aktuelleFarbe.opacity(0.10))
-                .cornerRadius(4)
-                
-            } else {
-                // --- NORMALE BESTANDSOBJEKT-ZEILE ---
-                switch node.status {
-                case .added:
-                    BestandsobjektRow(objekt: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.green.opacity(0.18))
-                        .cornerRadius(4)
-                    
-                case .removed:
-                    BestandsobjektRow(objekt: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.red.opacity(0.18))
-                        .cornerRadius(4)
-                        .opacity(0.8)
-                    
-                case .modified(let old):
-                    ModifiedBestandsobjektRow(old: old, new: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.orange.opacity(0.18))
-                        .cornerRadius(4)
-                    
-                case .unchanged:
-                    BestandsobjektRow(objekt: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .opacity(showUnchanged ? 1.0 : 0.55)
                 }
             }
+            .padding(.vertical, 1)
+            // Sendet die exakte Y-Position dieser Zeile im ScrollView-Koordinatenraum
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: NodePositionPreferenceKey.self,
+                        value: [NodePositionData(id: node.id, minY: geo.frame(in: .named("scrollSpace")).minY)]
+                    )
+                }
+            )
         }
-        .padding(.vertical, 1)
-    }
-
-    // Hilfsfunktion zur schnellen Farbzuordnung der Status-Zusätze
-    private func statusFarbe(for status: NodeStatus) -> Color {
-        switch status {
-        case .added: return .green
-        case .removed: return .red
-        case .modified: return .orange
-        case .unchanged: return .primary
+        
+        // MARK: - Position & Breadcrumb Calculation
+        
+        private func updateBreadcrumbFromPositions(_ positions: [NodePositionData]) {
+            // We filter out nodes scrolled past (minY < -20) and find the topmost visible item close to the view top
+            let visible = positions.filter { $0.minY >= -20 }
+            
+            guard let topNode = visible.min(by: { $0.minY < $1.minY }) else { return }
+            
+            computeBreadcrumb(for: topNode.id)
         }
-    }
-
-    
-    private var duplicateWarningBanner: some View {
+        
+        private func computeBreadcrumb(for id: UUID) {
+            guard let path = pathToNode(id: id, in: displayedRoots) else {
+                return
+            }
+            
+            let parts = path.map { node -> String in
+                let beschr = node.objekt.Beschreibung.trimmingCharacters(in: .whitespacesAndNewlines)
+                return beschr.isEmpty ? node.objekt.key : beschr
+            }
+            
+            if breadcrumbParts != parts {
+                breadcrumbParts = parts
+            }
+        }
+        
+        private func pathToNode(id: UUID, in roots: [HierarchyNode]) -> [HierarchyNode]? {
+            for root in roots {
+                if let path = pathRecursive(current: root, targetID: id) {
+                    return path
+                }
+            }
+            return nil
+        }
+        
+        private func pathRecursive(current: HierarchyNode, targetID: UUID) -> [HierarchyNode]? {
+            if current.id == targetID {
+                return [current]
+            }
+            for child in current.children {
+                if let subpath = pathRecursive(current: child, targetID: targetID) {
+                    var p = [current]
+                    p.append(contentsOf: subpath)
+                    return p
+                }
+            }
+            return nil
+        }
+        
+        // MARK: - Subviews
+        
+        private var duplicateWarningBanner: some View {
             let totalCount = diff.duplicateKeysOld.count + diff.duplicateKeysNew.count
-     
+            
             return VStack(alignment: .leading, spacing: 4) {
                 Button {
                     showDuplicateDetails.toggle()
@@ -285,7 +336,7 @@ struct DiffView: View {
                     }
                 }
                 .buttonStyle(.plain)
-     
+                
                 if showDuplicateDetails {
                     VStack(alignment: .leading, spacing: 2) {
                         if !diff.duplicateKeysOld.isEmpty {
@@ -309,8 +360,4 @@ struct DiffView: View {
             .padding(.vertical, 6)
             .background(Color.orange.opacity(0.08))
         }
-}
-
-#Preview {
-    ContentView()
-}
+    }

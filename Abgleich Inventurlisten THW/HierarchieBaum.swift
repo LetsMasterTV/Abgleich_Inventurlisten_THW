@@ -18,13 +18,14 @@ final class HierarchyNode: Identifiable {
     let objekt: Bestandsobjekt
     let status: NodeStatus
     var children: [HierarchyNode]
+    weak var parent: HierarchyNode?
  
     init(objekt: Bestandsobjekt, status: NodeStatus, children: [HierarchyNode] = []) {
         self.objekt = objekt
         self.status = status
         self.children = children
     }
- 
+
     var childrenOrNil: [HierarchyNode]? { children.isEmpty ? nil : children }
 }
 
@@ -88,7 +89,8 @@ func buildFullHierarchy(
             roots.append(node)
         } else if let parent = stack.last {
             parent.node.children.append(node)
-        } else {
+            node.parent = parent.node
+        }else {
             roots.append(node)
         }
         stack.append((level, node))
@@ -127,6 +129,7 @@ func buildFullHierarchy(
             // Wenn der Vater im neuen Baum existiert, hänge das gelöschte Objekt dort an
             if let parentNode = nodesByFullPath[vaterPfad] {
                 parentNode.children.append(node)
+                node.parent = parentNode
                 attached = true
             }
         }
