@@ -42,12 +42,7 @@ struct DiffView: View {
  
     @State private var showUnchanged = false
     @State private var showDuplicateDetails = false
- 
-    private var displayedRoots: [HierarchyNode] {
-        let fullTree = buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
-        return showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
-    }
- 
+    @State private var displayedRoots: [HierarchyNode] = []
     @State private var expanded: Set<UUID> = []
 
     var body: some View {
@@ -87,6 +82,15 @@ struct DiffView: View {
                     .padding(.horizontal)
                 }
                 .onAppear {
+                    // Baue den Baum einmal und speichere ihn stable in @State
+                    let fullTree = buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
+                    displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
+                    expanded = computeInitialExpanded(for: displayedRoots)
+                }
+                .onChange(of: showUnchanged) {
+                    // Wenn der Toggle "Unverändert einblenden" geändert wird, updaten
+                    let fullTree = buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
+                    displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
                     expanded = computeInitialExpanded(for: displayedRoots)
                 }
             }
