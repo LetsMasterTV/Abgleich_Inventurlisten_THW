@@ -95,8 +95,12 @@ struct ContentView: View {
                     DiffView(
                         diff: diff,
                         oldItems: viewModel.oldDocument?.inventurliste ?? [],
-                        newItems: viewModel.newDocument?.inventurliste ?? []
+                        newItems: viewModel.newDocument?.inventurliste ?? [],
+                        viewModel: viewModel
                     )
+                    .onChange(of: viewModel.searchText) {viewModel.scheduleRecomputeVisibleKeysDetached() }
+                    .onChange(of: viewModel.selectedCategory) { viewModel.scheduleRecomputeVisibleKeysDetached() }
+                    .onChange(of: viewModel.showOnlyDuplicates) { viewModel.scheduleRecomputeVisibleKeysDetached() }
                 } else {
                     Spacer()
                     Text("Bitte beide Dateien auswählen")

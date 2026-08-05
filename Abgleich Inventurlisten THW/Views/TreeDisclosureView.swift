@@ -1,4 +1,4 @@
-//
+
 //  TreeDisclosureView.swift
 //  Abgleich Inventurlisten THW
 //
@@ -9,6 +9,7 @@ import SwiftUI
 struct TreeDisclosureView: View {
     let node: HierarchyNode
     @Binding var expanded: Set<UUID>
+    let visibleKeys: Set<String>
     let content: (HierarchyNode) -> AnyView
 
     var body: some View {
@@ -19,20 +20,22 @@ struct TreeDisclosureView: View {
             }
         )
 
-        if node.children.isEmpty {
+        // Filtere Kinder: nur solche anzeigen, deren key in visibleKeys ist
+        let visibleChildren = node.children.filter { visibleKeys.contains($0.objekt.key) }
+
+        if visibleChildren.isEmpty {
             content(node)
         } else {
             DisclosureGroup(isExpanded: isExpanded) {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(node.children) { child in
-                        TreeDisclosureView(node: child, expanded: $expanded, content: content)
+                    ForEach(visibleChildren) { child in
+                        TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
                             .padding(.leading, 8)
                     }
                 }
             } label: {
                 content(node)
             }
-            
         }
     }
 }
