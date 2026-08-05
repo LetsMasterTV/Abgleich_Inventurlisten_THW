@@ -98,10 +98,7 @@ struct ContentView: View {
                         newItems: viewModel.newDocument?.inventurliste ?? [],
                         viewModel: viewModel
                     )
-                    .onChange(of: viewModel.searchText) {viewModel.scheduleRecomputeVisibleKeysDetached() }
-                    .onChange(of: viewModel.selectedCategory) { viewModel.scheduleRecomputeVisibleKeysDetached() }
-                    .onChange(of: viewModel.showOnlyDuplicates) { viewModel.scheduleRecomputeVisibleKeysDetached() }
-                } else {
+                    } else {
                     Spacer()
                     Text("Bitte beide Dateien auswählen")
                         .foregroundStyle(.secondary)
