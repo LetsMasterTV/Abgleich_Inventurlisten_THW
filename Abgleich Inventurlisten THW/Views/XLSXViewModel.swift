@@ -220,20 +220,24 @@ class XLSXViewModel {
             let lowerQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
             let predicate: @Sendable (NodeSnapshot) -> Bool = { node in
-                // Search in current fields
+                // 1. Suchtext-Prüfung
                 if !lowerQuery.isEmpty {
-                    if node.beschreibung.lowercased().contains(lowerQuery) { return true }
-                    if node.sachnummer.lowercased().contains(lowerQuery) { return true }
-                    if node.inventarnummer.lowercased().contains(lowerQuery) { return true }
-                    if node.geraetenummer.lowercased().contains(lowerQuery) { return true }
-                    // Check old values if modified
-                    if let oldB = node.oldBeschreibung, oldB.lowercased().contains(lowerQuery) { return true }
-                    if let oldS = node.oldSachnummer, oldS.lowercased().contains(lowerQuery) { return true }
-                    if let oldI = node.oldInventarnummer, oldI.lowercased().contains(lowerQuery) { return true }
-                    if let oldG = node.oldGeraetenummer, oldG.lowercased().contains(lowerQuery) { return true }
+                    let matchesSearch = node.beschreibung.lowercased().contains(lowerQuery) ||
+                                        node.sachnummer.lowercased().contains(lowerQuery) ||
+                                        node.inventarnummer.lowercased().contains(lowerQuery) ||
+                                        node.geraetenummer.lowercased().contains(lowerQuery) ||
+                                        (node.oldBeschreibung?.lowercased().contains(lowerQuery) ?? false) ||
+                                        (node.oldSachnummer?.lowercased().contains(lowerQuery) ?? false) ||
+                                        (node.oldInventarnummer?.lowercased().contains(lowerQuery) ?? false) ||
+                                        (node.oldGeraetenummer?.lowercased().contains(lowerQuery) ?? false)
+                    
+                    // Wenn der Suchbegriff in keinem Feld vorkommt -> Element sofort aussortieren!
+                    if !matchesSearch {
+                        return false
+                    }
                 }
 
-                // Category filtering
+                // 2. Kategorie-Filter
                 switch category {
                 case .all:
                     break
@@ -246,7 +250,6 @@ class XLSXViewModel {
                 case .unchanged:
                     if case .unchanged = node.status {} else { return false }
                 }
-
                 // Duplicate filtering
                 if onlyDup {
                     if !dupOld.contains(node.key) && !dupNew.contains(node.key) {

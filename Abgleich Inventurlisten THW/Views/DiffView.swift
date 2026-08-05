@@ -26,7 +26,7 @@ struct DiffView: View {
     let oldItems: [Bestandsobjekt]
     let newItems: [Bestandsobjekt]
     
-    @State var viewModel: XLSXViewModel
+    @Bindable var viewModel: XLSXViewModel
     
     @State private var showUnchanged = false
     @State private var showDuplicateDetails = false
@@ -130,13 +130,13 @@ struct DiffView: View {
                 .onChange(of: showUnchanged) { _, _ in
                     rebuildTree()
                 }
-                .onChange(of: viewModel.searchText) { _ in
+                .onChange(of: viewModel.searchText) {
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
-                .onChange(of: viewModel.selectedCategory) { _ in
+                .onChange(of: viewModel.selectedCategory) {
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
-                .onChange(of: viewModel.showOnlyDuplicates) { _ in
+                .onChange(of: viewModel.showOnlyDuplicates) {
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
             }
