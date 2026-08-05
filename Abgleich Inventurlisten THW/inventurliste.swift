@@ -347,28 +347,6 @@ struct Inventurliste {
                 duplicateKeysNew: newDuplicates
             )
         }
-     
-        /// Baut ein Dictionary aus den Objekten und erkennt dabei doppelte Keys,
-        /// statt bei Kollisionen abzustürzen (wie Dictionary(uniqueKeysWithValues:) es täte).
-        /// Bei Duplikaten wird ein Zähl-Suffix angehängt, damit auch diese Zeilen einzeln verglichen werden.
-        private static func buildDictionary(from items: [Bestandsobjekt]) -> (dict: [String: Bestandsobjekt], duplicates: Set<String>) {
-            var dict: [String: Bestandsobjekt] = [:]
-            var duplicates: Set<String> = []
-            var seenCounts: [String: Int] = [:]
-     
-            for item in items {
-                let baseKey = item.key
-                let occurrence = (seenCounts[baseKey] ?? 0) + 1
-                seenCounts[baseKey] = occurrence
-     
-                let uniqueKey = occurrence == 1 ? baseKey : "\(baseKey) #\(occurrence)"
-                if occurrence > 1 {
-                    duplicates.insert(baseKey)
-                }
-                dict[uniqueKey] = item
-            }
-            return (dict, duplicates)
-        }
     }
 
 
@@ -393,31 +371,3 @@ extension Inventurliste {
         return result
     }
 }
-
-
-
-extension Inventurliste {
-    // Hilfsfunktion: Berechnet rekursiv die Pfade für die Pfad-Knoten-Zuweisung
-    private static func generierePfadListe(
-        aus elementen: [Bestandsobjekt],
-        parents: [String: Bestandsobjekt]
-    ) -> [PfadElement] {
-        var ergebnis: [PfadElement] = []
-        
-        for item in elementen {
-            var pfadTeile: [String] = [item.key]
-            var currentParent = parents[item.key]
-            
-            // Wandere den Baum nach oben, um den vollen Pfad zu bauen
-            while let parent = currentParent {
-                pfadTeile.insert(parent.key, at: 0)
-                currentParent = parents[parent.key]
-            }
-            
-            let vollerPfad = pfadTeile.joined(separator: "/")
-            ergebnis.append(PfadElement(vollstaendigerPfad: vollerPfad, objekt: item))
-        }
-        return ergebnis
-    }
-}
-
