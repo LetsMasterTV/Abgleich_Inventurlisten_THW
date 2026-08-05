@@ -55,13 +55,6 @@ struct BestandsobjektRow: View {
             HStack {
                 Text(objekt.Beschreibung.isEmpty ? "(ohne Beschreibung)" : objekt.Beschreibung)
                     .font(.headline)
-                Spacer()
-                Text(objekt.Status)
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.gray.opacity(0.2))
-                    .clipShape(Capsule())
             }
  
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
@@ -75,6 +68,7 @@ struct BestandsobjektRow: View {
                     labeledField("Inventarnummer", objekt.Inventarnummer)
                     labeledField("Sachnummer", objekt.Sachnummer)
                     labeledField("Gerätenummer", objekt.Geraetenummer)
+                    labeledField("Status", objekt.Status)
                 }
             }
         }
@@ -83,7 +77,7 @@ struct BestandsobjektRow: View {
  
     @ViewBuilder
     private func labeledField(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading ,spacing: 4) {
+        VStack(alignment: .leading ,spacing: 6) {
             Text("\(label):")
                 .font(.caption2)
                 .foregroundStyle(.secondary)

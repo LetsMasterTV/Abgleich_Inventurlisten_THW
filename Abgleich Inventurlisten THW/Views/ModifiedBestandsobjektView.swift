@@ -98,7 +98,7 @@ struct ModifiedBestandsobjektRow: View {
             
             // Alle Felder wie bei BestandsobjektRow, aber geänderte Felder zeigen Alt/Neu
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
-                GridRow {
+                GridRow(alignment: .top) {
                     fieldCell("Ebene", new.Ebene)
                     fieldCell("Art", new.Art)
                     fieldCell("STAN soll", new.STAN_soll)
@@ -110,6 +110,7 @@ struct ModifiedBestandsobjektRow: View {
                     fieldCell("Gerätenummer", new.Geraetenummer)
                     fieldCell("Status", new.Status)
                 }
+            
             }
             .padding(.vertical, 4)
         }
@@ -119,18 +120,18 @@ struct ModifiedBestandsobjektRow: View {
     private func fieldCell(_ label: String, _ newValue: String) -> some View {
         if let change = change(for: label) {
             // Geändertes Feld: alter Wert durchgestrichen/rot, neuer Wert grün darunter
-            VStack(alignment: .center,spacing: 4,) {
+            VStack(alignment: .leading,spacing: 6,) {
                 Text("\(label):")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text(change.oldValue.isEmpty ? "–" : "\(change.oldValue)")
-                    .font(.caption)
-                    .strikethrough(true, color: .red)
-                    .foregroundStyle(.red)
                 Text(change.newValue.isEmpty ? "–" : change.newValue)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.green)
+                Text(change.oldValue.isEmpty ? "–" : "\(change.oldValue)")
+                    .font(.caption)
+                    .strikethrough(true, color: .red)
+                    .foregroundStyle(.red)
             }
         } else {
             // Unverändertes Feld: normale Anzeige wie in BestandsobjektRow

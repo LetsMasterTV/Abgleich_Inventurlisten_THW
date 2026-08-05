@@ -40,27 +40,26 @@ struct DiffView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header Controls mit Such- und Filterleiste
-            VStack(spacing: 8) {
-                HStack {
-                    Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
-                    Spacer()
-                    Button("▼ Alle", action: expandAll)
-                        .font(.caption2)
-                        .padding(.horizontal, 4)
-                    Button("▲ Keine", action: collapseAll)
-                        .font(.caption2)
-                        .padding(.horizontal, 4)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 6)
                 
                 // Filter & Such-Steuerung
-                VStack(spacing: 8) {
-                    Picker("Kategorie", selection: $viewModel.selectedCategory) {
-                        ForEach(FilterCategory.allCases) { cat in
-                            Text(cat.label).tag(cat)
-                        }
+                VStack(spacing: 12) {
+                
+                    HStack {
+                        Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
+                        Spacer()
+                        Button("▼ Alle", action: expandAll)
+                            .font(.caption2)
+                            .padding(.horizontal, 4)
+                        Button("▲ Keine", action: collapseAll)
+                            .font(.caption2)
+                            .padding(.horizontal, 4)
                     }
+                        
+                        Picker("Kategorie", selection: $viewModel.selectedCategory) {
+                            ForEach(FilterCategory.allCases) { cat in
+                                Text(cat.label).tag(cat)
+                            }
+                        }
                     .pickerStyle(.segmented)
                     
                     Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
@@ -71,7 +70,7 @@ struct DiffView: View {
                 .background(Color(.controlBackgroundColor))
                 .cornerRadius(6)
                 .padding(.horizontal)
-            }
+            
             
             if diff.hasDuplicateWarnings {
                 duplicateWarningBanner
@@ -101,6 +100,7 @@ struct DiffView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal)
                     .background(Color(.controlBackgroundColor).opacity(0.5))
+
                 }
                 
                 ScrollView {
@@ -116,6 +116,7 @@ struct DiffView: View {
                                     .opacity(0.3)
                             }
                         }
+
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 8)
@@ -253,45 +254,45 @@ struct DiffView: View {
                     
                     Spacer()
                 }
-                .padding(.leading, ebeneEinrueckung)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 8)
                 .background(node.statusIsUnchanged ? Color.clear : aktuelleFarbe.opacity(0.10))
                 .cornerRadius(4)
+                .padding(.leading, ebeneEinrueckung)
                 
             } else {
                 switch node.status {
                 case .added:
                     BestandsobjektRow(objekt: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
                         .background(Color.green.opacity(0.18))
                         .cornerRadius(4)
+                        .padding(.leading, ebeneEinrueckung)
                     
                 case .removed:
                     BestandsobjektRow(objekt: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
                         .background(Color.red.opacity(0.18))
                         .cornerRadius(4)
                         .opacity(0.8)
+                        .padding(.leading, ebeneEinrueckung)
                     
                 case .modified(let old):
                     ModifiedBestandsobjektRow(old: old, new: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
                         .background(Color.orange.opacity(0.18))
                         .cornerRadius(4)
+                        .padding(.leading, ebeneEinrueckung)
                     
                 case .unchanged:
                     BestandsobjektRow(objekt: node.objekt)
-                        .padding(.leading, ebeneEinrueckung)
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
                         .opacity(showUnchanged ? 1.0 : 0.55)
+                        .padding(.leading, ebeneEinrueckung)
                 }
             }
         }
