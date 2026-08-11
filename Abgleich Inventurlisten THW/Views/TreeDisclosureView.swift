@@ -32,26 +32,29 @@ struct TreeDisclosureView: View {
             content(node)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
-                    .frame(width: 2)                  // Dicke des Strichs (2 pt)
-                    .padding(.leading, 7)             // Perfekt zentriert unter dem 16pt-Pfeil
-                    .padding(.vertical, 2)
+            
                 
                 DisclosureGroup(isExpanded: isExpanded) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(visibleChildren) { child in
-                            TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
-                                .padding(.leading, 8)
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
+                            .frame(width: 2)                  // Dicke des Strichs (2 pt)
+                            .padding(.leading, 7)             // Perfekt zentriert unter dem 16pt-Pfeil
+                            .padding(.vertical, 2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(visibleChildren) { child in
+                                TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
+                                    .padding(.leading, 8)
+                            }
                         }
+                        .padding(.leading, 5)
                     }
-                    .padding(.leading, 20)
                 } label: {
                     content(node)
                 }
                 
             }
-        }
+        
     }
 }
