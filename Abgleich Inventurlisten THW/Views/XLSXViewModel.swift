@@ -93,6 +93,8 @@ class XLSXViewModel {
     var diff: XLSXDiff?
     var errorMessage: String?
 
+    private(set) var fullHierarchyRoots: [HierarchyNode] = []
+    
     enum DocumentSlot { case old, new }
 
     // MARK: - Search & Filter State
@@ -135,17 +137,10 @@ class XLSXViewModel {
         showOnlyDuplicates = false
         visibleKeysCache = []
         expandedKeys = []
+        fullHierarchyRoots = []
         visibleKeysTask?.cancel()
     }
-
-    // MARK: - Tree Building
-    /// Builds the full hierarchy from current documents and diff
-    var fullHierarchyRoots: [HierarchyNode] {
-        guard let diff = diff,
-              let newItems = newDocument?.inventurliste,
-              let oldItems = oldDocument?.inventurliste else { return [] }
-        return buildFullHierarchy(newItems: newItems, oldItems: oldItems, diff: diff)
-    }
+   
 
     // MARK: - Visibility Management
     /// Converts HierarchyNode tree into Sendable snapshots for background processing
@@ -295,10 +290,21 @@ class XLSXViewModel {
     }
 
     // MARK: - Private Helpers
+
     private func recomputeDiffIfPossible() {
         guard let oldDocument, let newDocument else { return }
-        diff = oldDocument.diff(against: newDocument)
-        // Trigger initial visibility computation
+
+        // diff(against:) berechnet die Parents nun intern
+        let newDiff = oldDocument.diff(against: newDocument)
+        diff = newDiff
+
+        // buildFullHierarchy berechnet die Parents ebenfalls selbst aus den übergebenen Listen
+        fullHierarchyRoots = buildFullHierarchy(
+            newItems: newDocument.inventurliste,
+            oldItems: oldDocument.inventurliste,
+            diff: newDiff
+        )
+
         scheduleRecomputeVisibleKeysDetached()
     }
 }

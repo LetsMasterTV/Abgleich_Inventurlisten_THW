@@ -93,7 +93,7 @@ struct Inventurliste {
                }
 
             for wbk in try file.parseWorkbooks() {
-                for (sheetName, path) in try file.parseWorksheetPathsAndNames(workbook: wbk) {
+                for (_, path) in try file.parseWorksheetPathsAndNames(workbook: wbk) {
                     let worksheet = try file.parseWorksheet(at: path)
                     let allrows = worksheet.data?.rows ?? []
                     // Header auslesen
@@ -245,109 +245,99 @@ struct Inventurliste {
     /// - Returns: A tuple containing:
     ///   - dict: A dictionary mapping unique keys to their corresponding Bestandsobjekt.
     ///   - duplicates: A set of base keys that occurred more than once in the input.
-    extension Inventurliste {
-        func diff(against other: Inventurliste) -> XLSXDiff {
-            let parentsOld = Self.computeParents(for: self.inventurliste)
-            let parentsNew = Self.computeParents(for: other.inventurliste)
-            
-            // Helfer zur Pfadgenerierung – wertet leere Ebenen als "0"
-            func generierePfadListe(aus elementen: [Bestandsobjekt], parents: [String: Bestandsobjekt]) -> [PfadElement] {
-                var ergebnis: [PfadElement] = []
-                
-                for item in elementen {
-                    // HIER: Wenn Ebene leer ist, wird sie als "0" gewertet
-                    let bereinigteEbene = item.Ebene.isEmpty ? "0" : (Int(item.Ebene) != nil ? item.Ebene : "0")
-                    
-                    var pfadTeile: [String] = ["[\(bereinigteEbene)] \(item.key)"]
-                    var currentParent = parents[item.key]
-                    
-                    while let parent = currentParent {
-                        let parentEbene = parent.Ebene.isEmpty ? "0" : (Int(parent.Ebene) != nil ? parent.Ebene : "0")
-                        pfadTeile.insert("[\(parentEbene)] \(parent.key)", at: 0)
-                        currentParent = parents[parent.key]
-                    }
-                    
-                    let vollerPfad = pfadTeile.joined(separator: "/")
-                    ergebnis.append(PfadElement(vollstaendigerPfad: vollerPfad, objekt: item))
-                }
-                return ergebnis
-            }
-            
-            let altePfade = generierePfadListe(aus: self.inventurliste, parents: parentsOld)
-            let neuePfade = generierePfadListe(aus: other.inventurliste, parents: parentsNew)
-            
-            func groupByFullPath(_ elements: [PfadElement]) -> [String: [Bestandsobjekt]] {
-                var dict: [String: [Bestandsobjekt]] = [:]
-                for el in elements {
-                    dict[el.vollstaendigerPfad, default: []].append(el.objekt)
-                }
-                for key in dict.keys {
-                    dict[key]?.sort { $0.Zeile < $1.Zeile }
-                }
-                return dict
-            }
-            
-            let oldGroups = groupByFullPath(altePfade)
-            let newGroups = groupByFullPath(neuePfade)
-            
-            var added: [Bestandsobjekt] = []
-            var removed: [Bestandsobjekt] = []
-            var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)] = []
-            var unchanged: [Bestandsobjekt] = []
-            
-            var oldDuplicates = Set<String>()
-            var newDuplicates = Set<String>()
-            
-            let allPaths = Set(oldGroups.keys).union(newGroups.keys)
-            
-            for pfad in allPaths {
-                let olds = oldGroups[pfad] ?? []
-                let news = newGroups[pfad] ?? []
-                
-                var matchedNewIndices = Set<Int>()
-                var matchedOldIndices = Set<Int>()
-                
-                for (oldIdx, oldItem) in olds.enumerated() {
-                    for (newIdx, newItem) in news.enumerated() {
-                        if !matchedNewIndices.contains(newIdx) && oldItem == newItem {
-                            unchanged.append(newItem)
-                            matchedOldIndices.insert(oldIdx)
-                            matchedNewIndices.insert(newIdx)
-                            break
-                        }
-                    }
-                }
-                
-                let remainingOlds = olds.enumerated().filter { !matchedOldIndices.contains($0.offset) }.map { $0.element }
-                let remainingNews = news.enumerated().filter { !matchedNewIndices.contains($0.offset) }.map { $0.element }
-                
-                let pairCount = min(remainingOlds.count, remainingNews.count)
-                
-                for i in 0..<pairCount {
-                    modified.append((alt: remainingOlds[i], new: remainingNews[i]))
-                }
-                
-                if remainingOlds.count > pairCount {
-                    removed.append(contentsOf: remainingOlds[pairCount...])
-                }
-                if remainingNews.count > pairCount {
-                    added.append(contentsOf: remainingNews[pairCount...])
-                }
-                
-                if remainingOlds.count > 1 { oldDuplicates.insert(pfad) }
-                if remainingNews.count > 1 { newDuplicates.insert(pfad) }
-            }
-            
-            return XLSXDiff(
-                added: added,
-                removed: removed,
-                modified: modified,
-                unchanged: unchanged,
-                duplicateKeysOld: oldDuplicates,
-                duplicateKeysNew: newDuplicates
-            )
+extension Inventurliste {
+    func diff(against other: Inventurliste) -> XLSXDiff {
+        let parentsOld = Self.computeParents(for: self.inventurliste)
+        let parentsNew = Self.computeParents(for: other.inventurliste)
+
+        // Pfadsegment für ein einzelnes Element (mit Ebenen-Präfix) – wertet leere Ebenen als "0"
+        func segment(for item: Bestandsobjekt) -> String {
+            let ebene = item.Ebene.isEmpty ? "0" : (Int(item.Ebene) != nil ? item.Ebene : "0")
+            return "[\(ebene)] \(item.key)"
         }
+
+        func generierePfadListe(aus elementen: [Bestandsobjekt], parents: [String: Bestandsobjekt]) -> [PfadElement] {
+            let pfade = Self.vollePfade(fuer: elementen, parents: parents, segment: segment)
+            return elementen.map { item in
+                PfadElement(vollstaendigerPfad: pfade[item.key] ?? segment(for: item), objekt: item)
+            }
+        }
+
+        let altePfade = generierePfadListe(aus: self.inventurliste, parents: parentsOld)
+        let neuePfade = generierePfadListe(aus: other.inventurliste, parents: parentsNew)
+
+        func groupByFullPath(_ elements: [PfadElement]) -> [String: [Bestandsobjekt]] {
+            var dict: [String: [Bestandsobjekt]] = [:]
+            for el in elements {
+                dict[el.vollstaendigerPfad, default: []].append(el.objekt)
+            }
+            for key in dict.keys {
+                dict[key]?.sort { $0.Zeile < $1.Zeile }
+            }
+            return dict
+        }
+
+        let oldGroups = groupByFullPath(altePfade)
+        let newGroups = groupByFullPath(neuePfade)
+
+        var added: [Bestandsobjekt] = []
+        var removed: [Bestandsobjekt] = []
+        var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)] = []
+        var unchanged: [Bestandsobjekt] = []
+
+        var oldDuplicates = Set<String>()
+        var newDuplicates = Set<String>()
+
+        let allPaths = Set(oldGroups.keys).union(newGroups.keys)
+
+        for pfad in allPaths {
+            let olds = oldGroups[pfad] ?? []
+            let news = newGroups[pfad] ?? []
+
+            var matchedNewIndices = Set<Int>()
+            var matchedOldIndices = Set<Int>()
+
+            for (oldIdx, oldItem) in olds.enumerated() {
+                for (newIdx, newItem) in news.enumerated() {
+                    if !matchedNewIndices.contains(newIdx) && oldItem == newItem {
+                        unchanged.append(newItem)
+                        matchedOldIndices.insert(oldIdx)
+                        matchedNewIndices.insert(newIdx)
+                        break
+                    }
+                }
+            }
+
+            let remainingOlds = olds.enumerated().filter { !matchedOldIndices.contains($0.offset) }.map { $0.element }
+            let remainingNews = news.enumerated().filter { !matchedNewIndices.contains($0.offset) }.map { $0.element }
+
+            let pairCount = min(remainingOlds.count, remainingNews.count)
+
+            for i in 0..<pairCount {
+                modified.append((alt: remainingOlds[i], new: remainingNews[i]))
+            }
+
+            if remainingOlds.count > pairCount {
+                removed.append(contentsOf: remainingOlds[pairCount...])
+            }
+            if remainingNews.count > pairCount {
+                added.append(contentsOf: remainingNews[pairCount...])
+            }
+
+            if remainingOlds.count > 1 { oldDuplicates.insert(pfad) }
+            if remainingNews.count > 1 { newDuplicates.insert(pfad) }
+        }
+
+        return XLSXDiff(
+            added: added,
+            removed: removed,
+            modified: modified,
+            unchanged: unchanged,
+            duplicateKeysOld: oldDuplicates,
+            duplicateKeysNew: newDuplicates
+        )
     }
+}
 
 
 
@@ -357,7 +347,7 @@ extension Inventurliste {
     static func computeParents(for items: [Bestandsobjekt]) -> [String: Bestandsobjekt] {
         var result: [String: Bestandsobjekt] = [:]
         var stack: [(level: Int, obj: Bestandsobjekt)] = []
- 
+
         for item in items {
             let level = Int(item.Ebene) ?? 0
             while let last = stack.last, last.level >= level {
@@ -369,5 +359,27 @@ extension Inventurliste {
             stack.append((level, item))
         }
         return result
+    }
+
+    /// Berechnet für eine in Original-Zeilenreihenfolge vorliegende Liste die vollständigen Pfade
+    /// (Wurzel → Element) in O(n), statt für jedes Element einzeln bis zur Wurzel hochzulaufen.
+    /// `segment` bestimmt das Pfadsegment pro Element (Default: einfach der Key).
+    /// Voraussetzung: Elternteile stehen in `items` vor ihren Kindern (Original-Zeilenreihenfolge).
+    static func vollePfade(
+        fuer items: [Bestandsobjekt],
+        parents: [String: Bestandsobjekt],
+        segment: (Bestandsobjekt) -> String = { $0.key }
+    ) -> [String: String] {
+        var cache: [String: String] = [:]
+        cache.reserveCapacity(items.count)
+        for item in items {
+            let eigenesSegment = segment(item)
+            if let parent = parents[item.key], let parentPath = cache[parent.key] {
+                cache[item.key] = parentPath + "/" + eigenesSegment
+            } else {
+                cache[item.key] = eigenesSegment
+            }
+        }
+        return cache
     }
 }

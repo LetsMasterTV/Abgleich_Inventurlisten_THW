@@ -77,7 +77,7 @@ struct BestandsobjektRow: View {
  
     @ViewBuilder
     private func labeledField(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading ,spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("\(label):")
                 .font(.caption2)
                 .foregroundStyle(.secondary)

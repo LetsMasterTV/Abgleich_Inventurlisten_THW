@@ -112,7 +112,7 @@ struct ContentView: View {
                     Button(role: .destructive) {
                         viewModel.reset()
                     } label: {
-                        Label("Zurücksetzen", systemImage: "arrow.counterclockwise")
+                        Label("Zurücksetzen", systemImage: "trash")
                     }
                     .disabled(viewModel.oldDocument == nil && viewModel.newDocument == nil)
                 }

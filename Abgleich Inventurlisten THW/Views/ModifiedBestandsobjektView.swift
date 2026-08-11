@@ -120,7 +120,7 @@ struct ModifiedBestandsobjektRow: View {
     private func fieldCell(_ label: String, _ newValue: String) -> some View {
         if let change = change(for: label) {
             // Geändertes Feld: alter Wert durchgestrichen/rot, neuer Wert grün darunter
-            VStack(alignment: .leading,spacing: 6,) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("\(label):")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -135,7 +135,7 @@ struct ModifiedBestandsobjektRow: View {
             }
         } else {
             // Unverändertes Feld: normale Anzeige wie in BestandsobjektRow
-            VStack(alignment: .center,spacing: 4,) {
+            VStack(alignment: .center, spacing: 4) {
                 Text("\(label):")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

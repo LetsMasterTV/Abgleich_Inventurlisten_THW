@@ -39,6 +39,7 @@ extension HierarchyNode {
 
  
 /// Baut aus einer flachen, geordneten Liste (Original-Dateireihenfolge!) einen vollständigen Baum.
+/// Baut aus einer flachen, geordneten Liste (Original-Dateireihenfolge!) einen vollständigen Baum.
 func buildFullHierarchy(
     newItems: [Bestandsobjekt],
     oldItems: [Bestandsobjekt],
@@ -46,86 +47,68 @@ func buildFullHierarchy(
 ) -> [HierarchyNode] {
     let newItemsSorted = newItems.sorted { $0.Zeile < $1.Zeile }
     let oldItemsSorted = oldItems.sorted { $0.Zeile < $1.Zeile }
-    
+
     let addedIDs = Set(diff.added.map { $0.id })
     let modifiedByID = Dictionary(uniqueKeysWithValues: diff.modified.map { ($0.new.id, $0.alt) })
     let removedIDs = Set(diff.removed.map { $0.id })
-    
+
     func ermittleStatus(for item: Bestandsobjekt) -> NodeStatus {
         if addedIDs.contains(item.id) { return .added }
         if let old = modifiedByID[item.id] { return .modified(old: old) }
         return .unchanged
     }
-    
+
     var roots: [HierarchyNode] = []
     var stack: [(level: Int, node: HierarchyNode)] = []
-    
+
     // Key-Mapping auf Basis des kombinierten Pfads, um präzise Elternzuordnung zu erlauben
     var nodesByFullPath: [String: HierarchyNode] = [:]
-    
+
     let parentsNew = Inventurliste.computeParents(for: newItemsSorted)
-    
+    let newPaths = Inventurliste.vollePfade(fuer: newItemsSorted, parents: parentsNew)
+
     // 1. Neue und modifizierte Elemente in die Hierarchie einbauen
     for item in newItemsSorted {
         // Leere oder ungültige Ebenen werden als Hauptebene (0) gewertet
         let level = Int(item.Ebene) ?? 0
         let node = HierarchyNode(objekt: item, status: ermittleStatus(for: item))
-        
-        var pfadTeile = [item.key]
-        var currentParent = parentsNew[item.key]
-        while let parent = currentParent {
-            pfadTeile.insert(parent.key, at: 0)
-            currentParent = parentsNew[parent.key]
-        }
-        let vollerPfad = pfadTeile.joined(separator: "/")
+
+        let vollerPfad = newPaths[item.key] ?? item.key
         nodesByFullPath[vollerPfad] = node
-        
+
         while let last = stack.last, last.level >= level {
             stack.removeLast()
         }
-        
+
         // Wenn level 0 ist oder der Stack leer ist, ist es ein Wurzel-Element ganz oben (z.B. Fahrzeug)
         if level == 0 || stack.isEmpty {
             roots.append(node)
         } else if let parent = stack.last {
             parent.node.children.append(node)
             node.parent = parent.node
-        }else {
+        } else {
             roots.append(node)
         }
         stack.append((level, node))
     }
 
-    
     // 2. DYNAMISCHE INJEKTION: Entfernte Objekte unter dem alten Eltern-Pfad einhängen
     let parentsOld = Inventurliste.computeParents(for: oldItemsSorted)
+    let oldPaths = Inventurliste.vollePfade(fuer: oldItemsSorted, parents: parentsOld)
     let removedOrdered = oldItemsSorted.filter { removedIDs.contains($0.id) }
-    
+
     for item in removedOrdered {
         let node = HierarchyNode(objekt: item, status: .removed)
-        
+
         // Bestimme den exakten alten Pfad, an dem das gelöschte Objekt stand
-        var pfadTeile = [item.key]
-        var currentParent = parentsOld[item.key]
-        while let parent = currentParent {
-            pfadTeile.insert(parent.key, at: 0)
-            currentParent = parentsOld[parent.key]
-        }
-        
-        let alterVollerPfad = pfadTeile.joined(separator: "/")
+        let alterVollerPfad = oldPaths[item.key] ?? item.key
         nodesByFullPath[alterVollerPfad] = node
-        
+
         // Finde den Vater-Knoten im neuen Anzeige-Baum über den alten Elternpfad
         var attached = false
         if let parentObjekt = parentsOld[item.key] {
-            var vaterPfadTeile = [parentObjekt.key]
-            var vaterParent = parentsOld[parentObjekt.key]
-            while let p = vaterParent {
-                vaterPfadTeile.insert(p.key, at: 0)
-                vaterParent = parentsOld[p.key]
-            }
-            let vaterPfad = vaterPfadTeile.joined(separator: "/")
-            
+            let vaterPfad = oldPaths[parentObjekt.key] ?? parentObjekt.key
+
             // Wenn der Vater im neuen Baum existiert, hänge das gelöschte Objekt dort an
             if let parentNode = nodesByFullPath[vaterPfad] {
                 parentNode.children.append(node)
@@ -133,12 +116,12 @@ func buildFullHierarchy(
                 attached = true
             }
         }
-        
+
         if !attached {
             roots.append(node) // Fallback an die Wurzel, falls der gesamte Ast gelöscht wurde
         }
     }
-    
+
     // Sortierung der Kinder nach originaler Excel-Reihenfolge wiederherstellen
     func sortiereKinder(von knoten: HierarchyNode) {
         knoten.children.sort { $0.objekt.Zeile < $1.objekt.Zeile }
@@ -148,7 +131,7 @@ func buildFullHierarchy(
     }
     roots.sort { $0.objekt.Zeile < $1.objekt.Zeile }
     for root in roots { sortiereKinder(von: root) }
-    
+
     return roots
 }
 
