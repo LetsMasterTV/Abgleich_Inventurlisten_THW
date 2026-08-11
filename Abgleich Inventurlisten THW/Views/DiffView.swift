@@ -31,8 +31,6 @@ struct DiffView: View {
     @State private var showUnchanged = false
     @State private var showDuplicateDetails = false
     
-    @State private var showFilters = false
-    
     @State private var displayedRoots: [HierarchyNode] = []
     @State private var expanded: Set<UUID> = []
     
@@ -42,6 +40,7 @@ struct DiffView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header Controls mit Such- und Filterleiste
+                
                 // Filter & Such-Steuerung
                 VStack(spacing: 12) {
                 
@@ -55,34 +54,22 @@ struct DiffView: View {
                             .font(.caption2)
                             .padding(.horizontal, 4)
                     }
-                    
-                    Divider()
-                    
-                    if showFilters {
-                        VStack {
-                            Picker("Kategorie", selection: $viewModel.selectedCategory) {
-                                ForEach(FilterCategory.allCases) { cat in
-                                    Text(cat.label).tag(cat)
-                                }
+                        
+                        Picker("Kategorie", selection: $viewModel.selectedCategory) {
+                            ForEach(FilterCategory.allCases) { cat in
+                                Text(cat.label).tag(cat)
                             }
-                            .pickerStyle(.segmented)
-                            
-                            Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
-                                .toggleStyle(.button)
                         }
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+                    .pickerStyle(.segmented)
                     
+                    Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
+                        .toggleStyle(.button)
                 }
-                .padding(12)
-                .background(Color(.controlBackgroundColor))
-                .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
                 .padding(.horizontal)
-                .padding(.top, 6)
-                
+                .padding(.vertical, 6)
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(6)
+                .padding(.horizontal)
             
             
             if diff.hasDuplicateWarnings {
@@ -133,13 +120,6 @@ struct DiffView: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 8)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(10)
-                    .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                    )
                 }
                 .coordinateSpace(name: "scrollSpace")
                 .onPreferenceChange(NodePositionPreferenceKey.self) { positions in
@@ -149,9 +129,6 @@ struct DiffView: View {
                     rebuildTree()
                 }
                 .onChange(of: showUnchanged) { _, _ in
-                    rebuildTree()
-                }
-                .onChange(of: viewModel.fullHierarchyRoots) { _, _ in
                     rebuildTree()
                 }
                 .onChange(of: viewModel.searchText) {
@@ -168,14 +145,12 @@ struct DiffView: View {
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
     }
     
-    // MARK: - Tree Management
     private func rebuildTree() {
-            let fullTree = viewModel.fullHierarchyRoots
-            displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
-            expanded = computeInitialExpanded(for: displayedRoots)
-            breadcrumbParts = []
-        }
-
+        let fullTree = viewModel.fullHierarchyRoots
+        displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
+        expanded = computeInitialExpanded(for: displayedRoots)
+        breadcrumbParts = []
+    }
     
     private func expandAll() {
         var allIds: Set<UUID> = []
