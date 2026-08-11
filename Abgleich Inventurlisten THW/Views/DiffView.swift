@@ -31,6 +31,9 @@ struct DiffView: View {
     @State private var showUnchanged = false
     @State private var showDuplicateDetails = false
     
+    @State private var hideDescriptions = false
+    @State private var showFilters = false
+    
     @State private var displayedRoots: [HierarchyNode] = []
     @State private var expanded: Set<UUID> = []
     
@@ -40,36 +43,8 @@ struct DiffView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header Controls mit Such- und Filterleiste
-                
-                // Filter & Such-Steuerung
-                VStack(spacing: 12) {
-                
-                    HStack {
-                        Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
-                        Spacer()
-                        Button("▼ Alle", action: expandAll)
-                            .font(.caption2)
-                            .padding(.horizontal, 4)
-                        Button("▲ Keine", action: collapseAll)
-                            .font(.caption2)
-                            .padding(.horizontal, 4)
-                    }
-                        
-                        Picker("Kategorie", selection: $viewModel.selectedCategory) {
-                            ForEach(FilterCategory.allCases) { cat in
-                                Text(cat.label).tag(cat)
-                            }
-                        }
-                    .pickerStyle(.segmented)
-                    
-                    Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
-                        .toggleStyle(.button)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 6)
-                .background(Color(.controlBackgroundColor))
-                .cornerRadius(6)
-                .padding(.horizontal)
+            
+            ShowOptionsSection
             
             
             if diff.hasDuplicateWarnings {
@@ -83,43 +58,16 @@ struct DiffView: View {
                 Spacer()
             } else {
                 // Sticky Breadcrumb Bar
+                // Sticky Breadcrumb Bar
                 if !breadcrumbParts.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(Array(breadcrumbParts.enumerated()), id: \.offset) { index, part in
-                            if index > 0 {
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            
-                            Text(part)
-                                .font(.caption.weight(index == breadcrumbParts.count - 1 ? .bold : .regular))
-                                .foregroundStyle(index == breadcrumbParts.count - 1 ? .primary : .secondary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal)
-                    .background(Color(.controlBackgroundColor).opacity(0.5))
-
+                    breadCrumpSection
+                    
+                    Divider()
                 }
                 
+                // Eigentliche ScrollView
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(displayedRoots) { root in
-                            if viewModel.visibleKeys.contains(root.objekt.key) {
-                                TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
-                                    AnyView(hierarchyRow(for: node))
-                                }
-                                
-                                Divider()
-                                    .padding(.vertical, 4)
-                                    .opacity(0.3)
-                            }
-                        }
-
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
+                    ScrollSection
                 }
                 .coordinateSpace(name: "scrollSpace")
                 .onPreferenceChange(NodePositionPreferenceKey.self) { positions in
@@ -140,9 +88,119 @@ struct DiffView: View {
                 .onChange(of: viewModel.showOnlyDuplicates) {
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
+                
             }
         }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
+        .toolbar {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showFilters.toggle()
+                            }
+                        } label: {
+                            Label("Filter", systemImage: showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        }
+                        .help("Filter & Optionen ein-/ausklappen")
+                    }
+                }
+    }
+    
+    private var ScrollSection: some View {
+        LazyVStack(alignment: .leading, spacing: 12) {
+            ForEach(displayedRoots) { root in
+                if viewModel.visibleKeys.contains(root.objekt.key) {
+                    TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
+                        AnyView(hierarchyRow(for: node))
+                    }
+                    
+                    Divider()
+                        .padding(.vertical, 4)
+                        .opacity(0.3)
+                }
+            }
+            .padding(.leading, 10)
+            
+        }
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .padding(.bottom, 12)
+    }
+    
+    private var breadCrumpSection: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(breadcrumbParts.enumerated()), id: \.offset) { index, part in
+                if index > 0 {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                
+                Text(part)
+                    .font(.caption.weight(index == breadcrumbParts.count - 1 ? .bold : .regular))
+                    .foregroundStyle(index == breadcrumbParts.count - 1 ? .primary : .secondary)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal)
+        .background(Color(.controlBackgroundColor).opacity(0.5))
+    }
+    
+    private var ShowOptionsSection: some View {
+        VStack(spacing: 12) {
+        HStack {
+            Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
+                .toggleStyle(.switch)
+            Toggle("Beschreibungen ausblenden", isOn: $hideDescriptions)
+                .toggleStyle(.switch)
+            Spacer()
+            Button("▼ Alle", action: expandAll)
+                .font(.caption2)
+                .padding(.horizontal, 4)
+            Button("▲ Keine", action: collapseAll)
+                .font(.caption2)
+                .padding(.horizontal, 4)
+        }
+        
+        if showFilters {
+            // Filter & Such-Steuerung
+            filterSechtion
+        }
+        
+    }
+    .padding(12)
+    .background(Color(.controlBackgroundColor))
+    .cornerRadius(8)
+    .overlay(RoundedRectangle(cornerRadius: 8)
+        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+    )
+    .padding(.horizontal)
+    .padding(.top, 6)
+    .transition(.move(edge: .top).combined(with: .opacity))
+        
+    }
+    
+    private var filterSechtion: some View {
+        VStack(spacing: 12){
+            Divider()
+            
+            HStack(spacing: 16) {
+                Picker("Kategorie", selection: $viewModel.selectedCategory) {
+                    ForEach(FilterCategory.allCases) { cat in
+                        Text(cat.label).tag(cat)
+                    }
+                }
+                .pickerStyle(.segmented)
+                
+                Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
+                    .toggleStyle(.button)
+            }
+        }
     }
     
     private func rebuildTree() {
@@ -214,84 +272,33 @@ struct DiffView: View {
     
     @ViewBuilder
     private func hierarchyRow(for node: HierarchyNode) -> some View {
-        let ebenenInt = Int(node.objekt.Ebene) ?? 0
-        let ebeneEinrueckung = CGFloat(ebenenInt * 12)
-        let istReineHeadline = node.objekt.Beschreibung.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        
-        let aktuelleFarbe: Color = {
-            switch node.status {
-            case .added: return .green
-            case .removed: return .red
-            case .modified: return .orange
-            case .unchanged: return .primary
-            }
-        }()
-        
         Group {
-            if istReineHeadline {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder.fill")
-                        .font(.footnote)
-                        .foregroundColor(node.statusIsUnchanged ? .secondary : aktuelleFarbe)
-                    
-                    Text(node.objekt.key.uppercased())
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(node.statusIsUnchanged ? .primary : aktuelleFarbe)
-                    
-                    switch node.status {
-                    case .added:
-                        Text("[NEUER ABSCHNITT]").font(.caption2).foregroundColor(.green)
-                    case .removed:
-                        Text("[ENTFERNT]").font(.caption2).foregroundColor(.red)
-                    case .modified:
-                        Text("[INHALT GEÄNDERT]").font(.caption2).foregroundColor(.orange)
-                    case .unchanged:
-                        EmptyView()
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                .background(node.statusIsUnchanged ? Color.clear : aktuelleFarbe.opacity(0.10))
-                .cornerRadius(4)
-                .padding(.leading, ebeneEinrueckung)
+            switch node.status {
+            case .added:
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                    .padding(.vertical, 6)
+                    .background(Color.green.opacity(0.18))
+                    .cornerRadius(6)
                 
-            } else {
-                switch node.status {
-                case .added:
-                    BestandsobjektRow(objekt: node.objekt)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.green.opacity(0.18))
-                        .cornerRadius(4)
-                        .padding(.leading, ebeneEinrueckung)
-                    
-                case .removed:
-                    BestandsobjektRow(objekt: node.objekt)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.red.opacity(0.18))
-                        .cornerRadius(4)
-                        .opacity(0.8)
-                        .padding(.leading, ebeneEinrueckung)
-                    
-                case .modified(let old):
-                    ModifiedBestandsobjektRow(old: old, new: node.objekt)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.orange.opacity(0.18))
-                        .cornerRadius(4)
-                        .padding(.leading, ebeneEinrueckung)
-                    
-                case .unchanged:
-                    BestandsobjektRow(objekt: node.objekt)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .opacity(showUnchanged ? 1.0 : 0.55)
-                        .padding(.leading, ebeneEinrueckung)
-                }
+            case .removed:
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                    .padding(.vertical, 6)
+                    .background(Color.red.opacity(0.18))
+                    .cornerRadius(6)
+                    .opacity(0.8)
+                
+            case .modified(let old):
+                ModifiedBestandsobjektRow(old: old, new: node.objekt, hideDescription: hideDescriptions)
+                    .padding(.vertical, 6)
+                    .background(Color.orange.opacity(0.18))
+                    .cornerRadius(6)
+                
+            case .unchanged:
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.03))
+                    .cornerRadius(6)
+                    .opacity(showUnchanged ? 1.0 : 0.55)
             }
         }
         .padding(.vertical, 1)

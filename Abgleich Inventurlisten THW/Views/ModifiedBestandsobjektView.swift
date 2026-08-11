@@ -54,6 +54,7 @@ import SwiftUI
 struct ModifiedBestandsobjektRow: View {
     let old: Bestandsobjekt
     let new: Bestandsobjekt
+    var hideDescription: Bool = false // NEU: Standardmäßig sichtbar
  
     private var changes: [Bestandsobjekt.FieldChange] {
         Bestandsobjekt.fieldChanges(from: old, to: new)
@@ -65,39 +66,43 @@ struct ModifiedBestandsobjektRow: View {
     }
  
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let beschreibungChange = change(for: "Beschreibung") {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack {
-                        Text(beschreibungChange.newValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.newValue)
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.green)
+        VStack(alignment: .leading, spacing: 8) {
+            if !hideDescription {
+                if let beschreibungChange = change(for: "Beschreibung") {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(beschreibungChange.newValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.newValue)
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.green)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("\(changes.count) Feld\(changes.count == 1 ? "" : "er") geändert")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                        }
+                        Text(beschreibungChange.oldValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.oldValue)
+                            .font(.subheadline)
+                            .strikethrough(true, color: .red)
+                            .foregroundStyle(.red)
                             .lineLimit(1)
+                    }
+                } else {
+                    HStack {
+                        Text(new.Beschreibung)
+                            .font(.title3)
+                            .fontWeight(.semibold)
                         Spacer()
                         Text("\(changes.count) Feld\(changes.count == 1 ? "" : "er") geändert")
-                            .font(.caption2)
+                            .font(.caption)
+                            .fontWeight(.medium)
                             .foregroundStyle(.orange)
                     }
-                    Text(beschreibungChange.oldValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.oldValue)
-                        .font(.subheadline)
-                        .strikethrough(true, color: .red)
-                        .foregroundStyle(.red)
-                        .lineLimit(1)
-                }
-            } else {
-                HStack {
-                    Text(new.Beschreibung)
-                        .font(.headline)
-                    Spacer()
-                    Text("\(changes.count) Feld\(changes.count == 1 ? "" : "er") geändert")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
                 }
             }
-            
             // Alle Felder wie bei BestandsobjektRow, aber geänderte Felder zeigen Alt/Neu
-            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow(alignment: .top) {
                     fieldCell("Ebene", new.Ebene)
                     fieldCell("Art", new.Art)
@@ -105,6 +110,7 @@ struct ModifiedBestandsobjektRow: View {
                     fieldCell("Menge Ist", new.Menge_ist)
                     fieldCell("THWin Bestand", new.THWin_Bestand)
                     fieldCell("Bestand Fahrzeug", new.Fahrzeug_Bestand)
+                    fieldCell("Beschreibung", new.Beschreibung)
                     fieldCell("Inventarnummer", new.Inventarnummer)
                     fieldCell("Sachnummer", new.Sachnummer)
                     fieldCell("Gerätenummer", new.Geraetenummer)
@@ -112,35 +118,38 @@ struct ModifiedBestandsobjektRow: View {
                 }
             
             }
-            .padding(.vertical, 4)
         }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .fixedSize(horizontal: true, vertical: false)
     }
  
     @ViewBuilder
     private func fieldCell(_ label: String, _ newValue: String) -> some View {
         if let change = change(for: label) {
             // Geändertes Feld: alter Wert durchgestrichen/rot, neuer Wert grün darunter
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .center, spacing: 8) {
                 Text("\(label):")
-                    .font(.caption2)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(change.newValue.isEmpty ? "–" : change.newValue)
-                    .font(.caption)
+                    .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.green)
                 Text(change.oldValue.isEmpty ? "–" : "\(change.oldValue)")
-                    .font(.caption)
+                    .font(.headline)
                     .strikethrough(true, color: .red)
                     .foregroundStyle(.red)
             }
         } else {
             // Unverändertes Feld: normale Anzeige wie in BestandsobjektRow
-            VStack(alignment: .center, spacing: 4) {
+            VStack(alignment: .center, spacing: 8) {
                 Text("\(label):")
-                    .font(.caption2)
+                    .font(.headline)
                     .foregroundStyle(.secondary)
                 Text(newValue.isEmpty ? "–" : newValue)
-                    .font(.caption)
+                    .font(.headline)
+                    .fontWeight(.medium)
             }
         }
     }

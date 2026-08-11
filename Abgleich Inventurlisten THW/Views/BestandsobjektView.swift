@@ -49,22 +49,28 @@ import SwiftUI
 /// - SeeAlso: `Bestandsobjekt`
 struct BestandsobjektRow: View {
     let objekt: Bestandsobjekt
+    var hideDescription: Bool = false // NEU: Standardmäßig sichtbar
  
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(objekt.Beschreibung.isEmpty ? "(ohne Beschreibung)" : objekt.Beschreibung)
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            if !hideDescription {
+                HStack {
+                    Text(objekt.Beschreibung.isEmpty ? "(ohne Beschreibung)" : objekt.Beschreibung)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                }
             }
  
-            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
-                GridRow {
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                GridRow(alignment: .top) {
                     labeledField("Ebene", objekt.Ebene)
                     labeledField("Art", objekt.Art)
                     labeledField("STAN soll", objekt.STAN_soll)
                     labeledField("Menge Ist", objekt.Menge_ist)
                     labeledField("THWin Bestand", objekt.THWin_Bestand)
                     labeledField("Bestand Fahrzeug", objekt.Fahrzeug_Bestand)
+                    labeledField("Beschreibung", objekt.Beschreibung)
                     labeledField("Inventarnummer", objekt.Inventarnummer)
                     labeledField("Sachnummer", objekt.Sachnummer)
                     labeledField("Gerätenummer", objekt.Geraetenummer)
@@ -72,17 +78,20 @@ struct BestandsobjektRow: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .fixedSize(horizontal: true, vertical: false)
     }
  
     @ViewBuilder
     private func labeledField(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .center, spacing: 8) {
             Text("\(label):")
-                .font(.caption2)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text(value.isEmpty ? "–" : value)
-                .font(.caption)
+                .font(.headline)
+                .fontWeight(.medium)
         }
     }
 }
