@@ -93,17 +93,17 @@ struct DiffView: View {
         }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
         .toolbar {
-                    ToolbarItem(placement: .secondaryAction) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showFilters.toggle()
-                            }
-                        } label: {
-                            Label("Filter", systemImage: showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        }
-                        .help("Filter & Optionen ein-/ausklappen")
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showFilters.toggle()
                     }
+                } label: {
+                    Label("Filter", systemImage: showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
+                .help("Filter & Optionen ein-/ausklappen")
+            }
+        }
     }
     
     private var ScrollSection: some View {
@@ -153,35 +153,35 @@ struct DiffView: View {
     
     private var ShowOptionsSection: some View {
         VStack(spacing: 12) {
-        HStack {
-            Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
-                .toggleStyle(.switch)
-            Toggle("Beschreibungen ausblenden", isOn: $hideDescriptions)
-                .toggleStyle(.switch)
-            Spacer()
-            Button("▼ Alle", action: expandAll)
-                .font(.caption2)
-                .padding(.horizontal, 4)
-            Button("▲ Keine", action: collapseAll)
-                .font(.caption2)
-                .padding(.horizontal, 4)
+            HStack {
+                Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
+                    .toggleStyle(.switch)
+                Toggle("Beschreibungen ausblenden", isOn: $hideDescriptions)
+                    .toggleStyle(.switch)
+                Spacer()
+                Button("▼ Alle", action: expandAll)
+                    .font(.caption2)
+                    .padding(.horizontal, 4)
+                Button("▲ Keine", action: collapseAll)
+                    .font(.caption2)
+                    .padding(.horizontal, 4)
+            }
+            
+            if showFilters {
+                // Filter & Such-Steuerung
+                filterSechtion
+            }
+            
         }
-        
-        if showFilters {
-            // Filter & Such-Steuerung
-            filterSechtion
-        }
-        
-    }
-    .padding(12)
-    .background(Color(.controlBackgroundColor))
-    .cornerRadius(8)
-    .overlay(RoundedRectangle(cornerRadius: 8)
-        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-    )
-    .padding(.horizontal)
-    .padding(.top, 6)
-    .transition(.move(edge: .top).combined(with: .opacity))
+        .padding(12)
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .padding(.top, 6)
+        .transition(.move(edge: .top).combined(with: .opacity))
         
     }
     
@@ -302,17 +302,11 @@ struct DiffView: View {
             }
         }
         .padding(.vertical, 1)
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: NodePositionPreferenceKey.self,
-                    value: [NodePositionData(id: node.id, minY: geo.frame(in: .named("scrollSpace")).minY)]
-                )
-            }
-        )
+        .modifier(PositionTrackingModifier(nodeID: node.id, track: (Int(node.objekt.Ebene) ?? 0) <= 1))
     }
     
     // MARK: - Position & Breadcrumb Calculation
+    
     
     private func updateBreadcrumbFromPositions(_ positions: [NodePositionData]) {
         let visible = positions.filter { $0.minY >= -20 }
@@ -405,5 +399,26 @@ struct DiffView: View {
         .padding(.horizontal)
         .padding(.vertical, 6)
         .background(Color.orange.opacity(0.08))
+    }
+    
+    
+    private struct PositionTrackingModifier: ViewModifier {
+        let nodeID: UUID
+        let track: Bool
+        
+        func body(content: Content) -> some View {
+            if track {
+                content.background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: NodePositionPreferenceKey.self,
+                            value: [NodePositionData(id: nodeID, minY: geo.frame(in: .named("scrollSpace")).minY)]
+                        )
+                    }
+                )
+            } else {
+                content
+            }
+        }
     }
 }

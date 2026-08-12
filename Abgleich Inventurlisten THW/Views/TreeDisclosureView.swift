@@ -42,7 +42,7 @@ struct TreeDisclosureView: View {
                             .padding(.leading, 7)             // Perfekt zentriert unter dem 16pt-Pfeil
                             .padding(.vertical, 2)
                         
-                        VStack(alignment: .leading, spacing: 2) {
+                        LazyVStack(alignment: .leading, spacing: 2) {
                             ForEach(visibleChildren) { child in
                                 TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
                                     .padding(.leading, 8)
