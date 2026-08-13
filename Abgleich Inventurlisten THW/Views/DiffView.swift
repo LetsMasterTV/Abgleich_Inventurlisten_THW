@@ -121,15 +121,17 @@ struct DiffView: View {
             
         }
         .background(Color(.controlBackgroundColor))
+        
         .cornerRadius(10)
         .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
+        .overlay(RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+                )
         .padding(.bottom, 12)
+
     }
     
+ 
     private var breadCrumpSection: some View {
         HStack(spacing: 6) {
             ForEach(Array(breadcrumbParts.enumerated()), id: \.offset) { index, part in
@@ -270,36 +272,27 @@ struct DiffView: View {
     
     @ViewBuilder
     private func hierarchyRow(for node: HierarchyNode) -> some View {
+        
         Group {
             switch node.status {
             case .added:
                 BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
-                    .padding(.vertical, 6)
-                    .background(Color.green.opacity(0.18))
-                    .cornerRadius(6)
                 
             case .removed:
                 BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
-                    .padding(.vertical, 6)
-                    .background(Color.red.opacity(0.18))
-                    .cornerRadius(6)
                     .opacity(0.8)
                 
             case .modified(let old):
                 ModifiedBestandsobjektRow(old: old, new: node.objekt, hideDescription: hideDescriptions)
-                    .padding(.vertical, 6)
-                    .background(Color.orange.opacity(0.18))
-                    .cornerRadius(6)
                 
             case .unchanged:
                 BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.03))
-                    .cornerRadius(6)
                     .opacity(showUnchanged ? 1.0 : 0.55)
             }
         }
-        .padding(.vertical, 1)
+        .background(node.children.isEmpty ? rowColor(for: node) : Color.clear)
+        .cornerRadius(6)
+        .padding(.vertical, 2)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named("scrollSpace")).minY
         } action: { newMinY in
@@ -311,6 +304,9 @@ struct DiffView: View {
         }
     }
     
+   
+
+
     // MARK: - Position & Breadcrumb Calculation
     
     

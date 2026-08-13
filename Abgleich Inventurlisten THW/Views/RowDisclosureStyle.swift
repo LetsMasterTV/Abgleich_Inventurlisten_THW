@@ -1,0 +1,42 @@
+//
+//  RowDisclosureStyle.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 13.08.2026.
+//
+import SwiftUI
+
+struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
+    let backgroundColor: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Der Header (Pfeil + Label)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    configuration.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    // Der echte System-Chevron mit nativer Drehung
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
+
+                    configuration.label
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .background(backgroundColor) // Färbt JETZT Pfeil + Label gemeinsam ein!
+                .cornerRadius(6)
+            }
+            .buttonStyle(.plain) // Entfernt den grauen Standard-Button-Hintergrund
+
+            // Der aufgeklappte Inhalt (Kinder)
+            if configuration.isExpanded {
+                configuration.content
+            }
+        }
+    }
+}

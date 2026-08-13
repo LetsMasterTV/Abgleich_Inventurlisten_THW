@@ -11,11 +11,6 @@ struct TreeDisclosureView: View {
     @Binding var expanded: Set<UUID>
     let visibleKeys: Set<String>
     let content: (HierarchyNode) -> AnyView
-    
-  //  private var indentation: CGFloat {
-   //         let ebenenInt = Int(node.objekt.Ebene) ?? 1
-  //          return CGFloat(max(0, ebenenInt - 1) * 12) // 12 pt pro Ebene (anpassbar)
-//}
 
     var body: some View {
         let isExpanded = Binding<Bool>(
@@ -53,8 +48,19 @@ struct TreeDisclosureView: View {
                 } label: {
                     content(node)
                 }
-                
+                .disclosureGroupStyle(ColoredDisclosureGroupStyle(backgroundColor: rowColor(for: node)))
             }
         
     }
 }
+
+ func rowColor(for node: HierarchyNode) -> Color {
+    switch node.status {
+    case .added: return Color.green.opacity(0.18)
+    case .removed: return Color.red.opacity(0.18)
+    case .modified: return Color.orange.opacity(0.18)
+    case .unchanged: return Color.primary.opacity(0.03)
+    }
+}
+
+
