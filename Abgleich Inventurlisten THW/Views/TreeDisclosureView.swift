@@ -35,7 +35,7 @@ struct TreeDisclosureView: View {
                             .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
                             .frame(width: 2)                  // Dicke des Strichs (2 pt)
                             .padding(.leading, 20)             // Perfekt zentriert unter dem 16pt-Pfeil
-                            .padding(.vertical, 2)
+                
                         
                         LazyVStack(alignment: .leading, spacing: 2) {
                             ForEach(visibleChildren) { child in

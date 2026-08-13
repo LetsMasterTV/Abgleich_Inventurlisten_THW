@@ -10,7 +10,7 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
     let backgroundColor: Color
 
     func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             // Der Header (Pfeil + Label)
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -21,13 +21,14 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
                     // Der echte System-Chevron mit nativer Drehung
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.foreground)
                         .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
 
                     configuration.label
                 }
                 .padding(.vertical, 4)
-                .padding(.horizontal, 6)
+                .padding(.leading, 8)
+                .padding(.trailing, 6)
                 .background(backgroundColor) // Färbt JETZT Pfeil + Label gemeinsam ein!
                 .cornerRadius(6)
             }
@@ -36,6 +37,7 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
             // Der aufgeklappte Inhalt (Kinder)
             if configuration.isExpanded {
                 configuration.content
+                    .padding(.top, 8)
             }
         }
     }

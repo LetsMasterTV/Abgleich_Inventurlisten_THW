@@ -64,27 +64,41 @@ struct ContentView: View {
  
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
+            VStack(spacing: 30) {
                 HStack {
-                    Button("Alte Datei wählen") {
-                        requestFile(for: .old)
+                    Spacer()
+                    VStack {
+                        Button("") {
+                            requestFile(for: .old)
+                        }
+                        .buttonStyle(
+                            .fileImporter(
+                                title: "Alte Inventur wählen",
+                                subtitle: ".xlsx",
+                                systemImage: "arrow.up.doc.fill",
+                                isSelected: viewModel.oldDocument != nil
+                            )
+                        )
                     }
                     Spacer()
-                    if viewModel.oldDocument != nil {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    }
-                }
- 
-                HStack {
-                    Button("Neue Datei wählen") {
-                        requestFile(for: .new)
+
+                    VStack {
+                        Button("") {
+                            requestFile(for: .new)
+                        }
+                        .buttonStyle(
+                            .fileImporter(
+                                title: "Neue Inventur wählen",
+                                subtitle: ".xlsx",
+                                systemImage: "arrow.up.doc.fill",
+                                isSelected: viewModel.newDocument != nil
+                            )
+                        )
+                      
                     }
                     Spacer()
-                    if viewModel.newDocument != nil {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    }
                 }
- 
+                
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .foregroundStyle(.red)
