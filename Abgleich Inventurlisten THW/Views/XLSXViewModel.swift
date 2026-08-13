@@ -210,7 +210,7 @@ class XLSXViewModel {
         let dupNew = self.diff?.duplicateKeysNew ?? []
 
         // Start detached background task
-        visibleKeysTask = Task.detached { [snapshots, query, activeStatuses, onlyDup, dupOld, dupNew] in
+        visibleKeysTask = Task.detached { [snapshots, query, activeStatuses] in
             // Debounce sleep (cancellable)
             do {
                 try await Task.sleep(nanoseconds: debounceMillis * 1_000_000)
@@ -267,10 +267,6 @@ class XLSXViewModel {
                             }
                         }()
                         if !matchesStatus { return false }
-
-                        if onlyDup {
-                            if !dupOld.contains(node.itemkey) && !dupNew.contains(node.itemkey) { return false }
-                        }
 
                 return true
             }

@@ -74,11 +74,12 @@ import Foundation
         let id = UUID()
         let Zeile: Int   // Original-Zeilennummer aus der Excel-Datei – stabile Reihenfolge für den Hierarchie-Aufbau
         let Ebene: String
+        let Ortseinheit: String
         let Art: String
-        let STAN_soll: String
+        let Fremdbeschaft: String
+        let Menge_STAN: String
         let Menge_ist: String
-        let THWin_Bestand: String
-        let Fahrzeug_Bestand: String
+        let Verfuegbar: String
         let Beschreibung: String
         let Sachnummer: String
         let Inventarnummer: String
@@ -93,11 +94,12 @@ import Foundation
         // eine Zeile kann in der neuen Datei an anderer Position stehen, ohne inhaltlich "geändert" zu sein.
         static func == (lhs: Bestandsobjekt, rhs: Bestandsobjekt) -> Bool {
             lhs.Ebene == rhs.Ebene &&
+            lhs.Ortseinheit == rhs.Ortseinheit &&
             lhs.Art == rhs.Art &&
-            lhs.STAN_soll == rhs.STAN_soll &&
+            lhs.Fremdbeschaft == rhs.Fremdbeschaft &&
+            lhs.Menge_STAN == rhs.Menge_STAN &&
             lhs.Menge_ist == rhs.Menge_ist &&
-            lhs.THWin_Bestand == rhs.THWin_Bestand &&
-            lhs.Fahrzeug_Bestand == rhs.Fahrzeug_Bestand &&
+            lhs.Verfuegbar == rhs.Verfuegbar &&
             lhs.Beschreibung == rhs.Beschreibung &&
             lhs.Sachnummer == rhs.Sachnummer &&
             lhs.Inventarnummer == rhs.Inventarnummer &&
@@ -113,15 +115,16 @@ import Foundation
      
             self.Zeile = zeile
             self.Ebene = (dict["Ebene"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Ortseinheit = (dict["OE"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Art = (dict["Art"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.STAN_soll = (dict["STAN soll"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Fremdbeschaft = (dict["FB"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Menge_STAN = (dict["Menge"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Menge_ist = (dict["Menge Ist"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.THWin_Bestand = (dict["THWin Bestand"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.Fahrzeug_Bestand = (dict["Bestand Fahrzeug"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.Beschreibung = (dict["Beschreibung"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Verfuegbar = (dict["Verfügbar"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Beschreibung = (dict["Ausstattung | Hersteller | Typ"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Sachnummer = (dict["Sachnummer"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.Inventarnummer = (dict["Inventarnummer"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.Geraetenummer = (dict["Geraetenummer"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Inventarnummer = (dict["Inventar Nr"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Geraetenummer = (dict["Gerätenr."] ?? "").trimmingCharacters(in: .whitespaces)
             self.Status = (dict["Status"] ?? "").trimmingCharacters(in: .whitespaces)
         }
     }
@@ -236,15 +239,16 @@ extension Bestandsobjekt {
         }
 
         compare("Ebene", old.Ebene, new.Ebene)
+        compare("OE", old.Ortseinheit, new.Ortseinheit)
         compare("Art", old.Art, new.Art)
-        compare("STAN soll", old.STAN_soll, new.STAN_soll)
+        compare("FB", old.Art, new.Art)
+        compare("Menge", old.Menge_STAN, new.Menge_STAN)
         compare("Menge Ist", old.Menge_ist, new.Menge_ist)
-        compare("THWin Bestand", old.THWin_Bestand, new.THWin_Bestand)
-        compare("Bestand Fahrzeug", old.Fahrzeug_Bestand, new.Fahrzeug_Bestand)
-        compare("Beschreibung", old.Beschreibung, new.Beschreibung)
+        compare("Verfügbar", old.Verfuegbar, new.Verfuegbar)
+        compare("Ausstattung | Hersteller | Typ", old.Beschreibung, new.Beschreibung)
         compare("Sachnummer", old.Sachnummer, new.Sachnummer)
-        compare("Inventarnummer", old.Inventarnummer, new.Inventarnummer)
-        compare("Gerätenummer", old.Geraetenummer, new.Geraetenummer)
+        compare("Inventar Nr", old.Inventarnummer, new.Inventarnummer)
+        compare("Gerätenr.", old.Geraetenummer, new.Geraetenummer)
         compare("Status", old.Status, new.Status)
 
         return changes

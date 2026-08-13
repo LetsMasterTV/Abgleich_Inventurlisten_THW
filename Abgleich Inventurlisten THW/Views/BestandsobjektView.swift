@@ -65,14 +65,15 @@ struct BestandsobjektRow: View {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow(alignment: .top) {
                     labeledField("Ebene", objekt.Ebene)
+                    labeledField("Ortseinheit", objekt.Ortseinheit)
                     labeledField("Art", objekt.Art)
-                    labeledField("STAN soll", objekt.STAN_soll)
+                    labeledField("Fremdbeschafft", objekt.Fremdbeschaft)
+                    labeledField("STAN soll", objekt.Menge_STAN)
                     labeledField("Menge Ist", objekt.Menge_ist)
-                    labeledField("THWin Bestand", objekt.THWin_Bestand)
-                    labeledField("Bestand Fahrzeug", objekt.Fahrzeug_Bestand)
-                    labeledField("Beschreibung", objekt.Beschreibung)
-                    labeledField("Inventarnummer", objekt.Inventarnummer)
+                    labeledField("THWin Bestand", objekt.Verfuegbar)
+                    labeledField("Ausstattung | Hersteller | Typ", objekt.Beschreibung)
                     labeledField("Sachnummer", objekt.Sachnummer)
+                    labeledField("Inventarnummer", objekt.Inventarnummer)
                     labeledField("Gerätenummer", objekt.Geraetenummer)
                     labeledField("Status", objekt.Status)
                 }

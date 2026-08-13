@@ -105,14 +105,15 @@ struct ModifiedBestandsobjektRow: View {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow(alignment: .top) {
                     fieldCell("Ebene", new.Ebene)
+                    fieldCell("Ortseinheit", new.Ortseinheit)
                     fieldCell("Art", new.Art)
-                    fieldCell("STAN soll", new.STAN_soll)
+                    fieldCell("Fremdbeschafft", new.Fremdbeschaft)
+                    fieldCell("Menge_STAN", new.Menge_STAN)
                     fieldCell("Menge Ist", new.Menge_ist)
-                    fieldCell("THWin Bestand", new.THWin_Bestand)
-                    fieldCell("Bestand Fahrzeug", new.Fahrzeug_Bestand)
-                    fieldCell("Beschreibung", new.Beschreibung)
-                    fieldCell("Inventarnummer", new.Inventarnummer)
+                    fieldCell("Verfügbar", new.Verfuegbar)
+                    fieldCell("Ausstattung | Hersteller | Typ", new.Beschreibung)
                     fieldCell("Sachnummer", new.Sachnummer)
+                    fieldCell("Inventarnummer", new.Inventarnummer)
                     fieldCell("Gerätenummer", new.Geraetenummer)
                     fieldCell("Status", new.Status)
                 }

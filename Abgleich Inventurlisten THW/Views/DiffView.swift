@@ -72,18 +72,16 @@ struct DiffView: View {
                 .coordinateSpace(name: "scrollSpace")
                 .onAppear {
                     rebuildTree()
+                    expanded = viewModel.defaultExpandedPruned
                 }
+                
                 .onChange(of: viewModel.searchText) {
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
                 .onChange(of: viewModel.selectedStatuses) {
-                    rebuildTree()
-                    viewModel.scheduleRecomputeVisibleKeysDetached()
-                }
-                .onChange(of: viewModel.showOnlyDuplicates) {
-                    viewModel.scheduleRecomputeVisibleKeysDetached()
-                }
-                
+                    withTransaction(Transaction(animation: nil)) {
+                        rebuildTree()
+                    }}
             }
         }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
@@ -124,7 +122,7 @@ struct DiffView: View {
         .overlay(RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
                 )
-        .padding(.bottom, 12)
+        .padding(.vertical, 12)
 
     }
     
@@ -202,8 +200,6 @@ struct DiffView: View {
                                     }
                                 }
                 
-                Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
-                    .toggleStyle(.button)
             }
         }
     }
@@ -212,11 +208,9 @@ struct DiffView: View {
         // Prüfen, ob der User "Unverändert" im Filter-Set hat
         if viewModel.selectedStatuses.contains(.unchanged) {
             displayedRoots = viewModel.fullHierarchyRoots
-            expanded = viewModel.defaultExpandedFull
         } else {
             // Performance-Booster: Schlanken Baum ohne unveränderte Zweige nutzen
             displayedRoots = viewModel.prunedHierarchyRoots
-            expanded = viewModel.defaultExpandedPruned
         }
         breadcrumbParts = []
     }
