@@ -9,7 +9,7 @@ import SwiftUI
 
 // Marker für die Positionen im ScrollView-Koordinatensystem
 struct NodePositionData: Equatable {
-    let id: UUID
+    let id: String
     let minY: CGFloat
 }
 
@@ -28,18 +28,17 @@ struct DiffView: View {
     
     @Bindable var viewModel: XLSXViewModel
     
-    @State private var showUnchanged = false
     @State private var showDuplicateDetails = false
     
     @State private var hideDescriptions = false
     @State private var showFilters = false
     
     @State private var displayedRoots: [HierarchyNode] = []
-    @State private var expanded: Set<UUID> = []
+    @State private var expanded: Set<String> = []
     
     // Breadcrumb-Pfad
     @State private var breadcrumbParts: [String] = []
-    @State private var nodePositions: [UUID: CGFloat] = [:]
+    @State private var nodePositions: [String: CGFloat] = [:]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -52,7 +51,7 @@ struct DiffView: View {
                 duplicateWarningBanner
             }
             
-            if !diff.hasChanges && !showUnchanged {
+            if !diff.hasChanges && !viewModel.selectedStatuses.contains(.unchanged) {
                 Spacer()
                 Text("Keine Unterschiede gefunden")
                     .foregroundStyle(.secondary)
@@ -74,13 +73,11 @@ struct DiffView: View {
                 .onAppear {
                     rebuildTree()
                 }
-                .onChange(of: showUnchanged) { _, _ in
-                    rebuildTree()
-                }
                 .onChange(of: viewModel.searchText) {
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
-                .onChange(of: viewModel.selectedCategory) {
+                .onChange(of: viewModel.selectedStatuses) {
+                    rebuildTree()
                     viewModel.scheduleRecomputeVisibleKeysDetached()
                 }
                 .onChange(of: viewModel.showOnlyDuplicates) {
@@ -107,9 +104,9 @@ struct DiffView: View {
     private var ScrollSection: some View {
         LazyVStack(alignment: .leading, spacing: 12) {
             ForEach(displayedRoots) { root in
-                if viewModel.visibleKeys.contains(root.objekt.key) {
+                if viewModel.visibleKeys.contains(root.id) {
                     TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
-                        AnyView(hierarchyRow(for: node))
+                        hierarchyRow(for: node)
                     }
                     
                     Divider()
@@ -154,8 +151,6 @@ struct DiffView: View {
     private var ShowOptionsSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
-                    .toggleStyle(.switch)
                 Toggle("Überschriften ausblenden", isOn: $hideDescriptions)
                     .toggleStyle(.switch)
                 Spacer()
@@ -190,12 +185,22 @@ struct DiffView: View {
             Divider()
             
             HStack(spacing: 16) {
-                Picker("Kategorie", selection: $viewModel.selectedCategory) {
-                    ForEach(FilterCategory.allCases) { cat in
-                        Text(cat.label).tag(cat)
-                    }
-                }
-                .pickerStyle(.segmented)
+                HStack(spacing: 8) {
+                                    ForEach(FilterStatus.allCases) { status in
+                                        Toggle(status.rawValue, isOn: Binding(
+                                            get: { viewModel.selectedStatuses.contains(status) },
+                                            set: { isSelected in
+                                                if isSelected {
+                                                    viewModel.selectedStatuses.insert(status)
+                                                } else {
+                                                    viewModel.selectedStatuses.remove(status)
+                                                }
+                                                viewModel.scheduleRecomputeVisibleKeysDetached()
+                                            }
+                                        ))
+                                        .toggleStyle(.button)
+                                    }
+                                }
                 
                 Toggle("Nur Duplikate", isOn: $viewModel.showOnlyDuplicates)
                     .toggleStyle(.button)
@@ -204,14 +209,19 @@ struct DiffView: View {
     }
     
     private func rebuildTree() {
-        let fullTree = viewModel.fullHierarchyRoots
-        displayedRoots = showUnchanged ? fullTree : pruneToChangesOnly(fullTree)
-        expanded = computeInitialExpanded(for: displayedRoots)
+        // Prüfen, ob der User "Unverändert" im Filter-Set hat
+        if viewModel.selectedStatuses.contains(.unchanged) {
+            displayedRoots = viewModel.fullHierarchyRoots
+            expanded = viewModel.defaultExpandedFull
+        } else {
+            // Performance-Booster: Schlanken Baum ohne unveränderte Zweige nutzen
+            displayedRoots = viewModel.prunedHierarchyRoots
+            expanded = viewModel.defaultExpandedPruned
+        }
         breadcrumbParts = []
     }
-    
     private func expandAll() {
-        var allIds: Set<UUID> = []
+        var allIds: Set<String> = []
         func collect(_ node: HierarchyNode) {
             allIds.insert(node.id)
             for child in node.children { collect(child) }
@@ -224,8 +234,17 @@ struct DiffView: View {
         expanded.removeAll()
     }
     
-    private func computeInitialExpanded(for roots: [HierarchyNode]) -> Set<UUID> {
-        var toExpand: Set<UUID> = []
+    private func computeInitialExpanded(for roots: [HierarchyNode]) -> Set<String> {
+        var toExpand: Set<String> = []
+        
+        if viewModel.selectedStatuses.contains(.unchanged) {
+                // Wir klappen einfach nur die Haupt-Kategorien (Ebene 0) auf.
+                // Das geht in 1 Millisekunde statt in 2 Sekunden.
+                for root in roots {
+                    toExpand.insert(root.id)
+                }
+                return toExpand
+            }
         
         func traverse(_ node: HierarchyNode) -> Bool {
             var hasChange = false
@@ -287,7 +306,7 @@ struct DiffView: View {
                 
             case .unchanged:
                 BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
-                    .opacity(showUnchanged ? 1.0 : 0.55)
+                    .opacity(viewModel.selectedStatuses.contains(.unchanged) ? 1.0 : 0.55)
             }
         }
         .background(node.children.isEmpty ? rowColor(for: node) : Color.clear)
@@ -321,7 +340,7 @@ struct DiffView: View {
         computeBreadcrumb(for: topID)
     }
     
-    private func computeBreadcrumb(for id: UUID) {
+    private func computeBreadcrumb(for id: String) {
         guard let path = pathToNode(id: id, in: displayedRoots) else {
             return
         }
@@ -336,7 +355,7 @@ struct DiffView: View {
         }
     }
     
-    private func pathToNode(id: UUID, in roots: [HierarchyNode]) -> [HierarchyNode]? {
+    private func pathToNode(id: String, in roots: [HierarchyNode]) -> [HierarchyNode]? {
         for root in roots {
             if let path = pathRecursive(current: root, targetID: id) {
                 return path
@@ -345,7 +364,7 @@ struct DiffView: View {
         return nil
     }
     
-    private func pathRecursive(current: HierarchyNode, targetID: UUID) -> [HierarchyNode]? {
+    private func pathRecursive(current: HierarchyNode, targetID: String) -> [HierarchyNode]? {
         if current.id == targetID {
             return [current]
         }
@@ -408,7 +427,7 @@ struct DiffView: View {
     
     
     private struct PositionTrackingModifier: ViewModifier {
-        let nodeID: UUID
+        let nodeID: String
         let track: Bool
         
         func body(content: Content) -> some View {

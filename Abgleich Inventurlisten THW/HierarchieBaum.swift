@@ -14,13 +14,14 @@ enum NodeStatus {
 }
  
 final class HierarchyNode: Identifiable {
-    let id = UUID()
+    let id: String
     let objekt: Bestandsobjekt
     let status: NodeStatus
     var children: [HierarchyNode]
     weak var parent: HierarchyNode?
  
-    init(objekt: Bestandsobjekt, status: NodeStatus, children: [HierarchyNode] = []) {
+    init(id: String, objekt: Bestandsobjekt, status: NodeStatus, children: [HierarchyNode] = []) {
+        self.id = id
         self.objekt = objekt
         self.status = status
         self.children = children
@@ -71,10 +72,12 @@ func buildFullHierarchy(
     for item in newItemsSorted {
         // Leere oder ungültige Ebenen werden als Hauptebene (0) gewertet
         let level = Int(item.Ebene) ?? 0
-        let node = HierarchyNode(objekt: item, status: ermittleStatus(for: item))
-
         let vollerPfad = newPaths[item.key] ?? item.key
+        let uniqueID = "\(vollerPfad) [Neu:#\(item.Zeile) \(item.key))]"
+        
+        let node = HierarchyNode(id: uniqueID, objekt: item, status: ermittleStatus(for: item))
         nodesByFullPath[vollerPfad] = node
+        
 
         while let last = stack.last, last.level >= level {
             stack.removeLast()
@@ -98,10 +101,13 @@ func buildFullHierarchy(
     let removedOrdered = oldItemsSorted.filter { removedIDs.contains($0.id) }
 
     for item in removedOrdered {
-        let node = HierarchyNode(objekt: item, status: .removed)
 
         // Bestimme den exakten alten Pfad, an dem das gelöschte Objekt stand
         let alterVollerPfad = oldPaths[item.key] ?? item.key
+        let uniqueID = "\(alterVollerPfad) [Alt:#\(item.Zeile) \(item.key)]"
+        let node = HierarchyNode(id: uniqueID, objekt: item, status: .removed)
+
+        
         nodesByFullPath[alterVollerPfad] = node
 
         // Finde den Vater-Knoten im neuen Anzeige-Baum über den alten Elternpfad
@@ -139,19 +145,29 @@ func buildFullHierarchy(
 /// Reduziert einen vollständigen Baum auf die Knoten, die SELBST geändert/neu/entfernt sind,
 /// oder mindestens einen solchen Nachfahren enthalten. Reine Kontext-Vorfahren bleiben erhalten
 /// (damit man überhaupt zur Änderung navigieren kann), rein unveränderte Äste fallen komplett weg.
-func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> [HierarchyNode] {
-    var result: [HierarchyNode] = []
+func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> (nodes: [HierarchyNode], expandedKeys: Set<String>) {
+    var resultNodes: [HierarchyNode] = []
+    var expandedKeys: Set<String> = []
+
     for node in nodes {
-        let prunedChildren = pruneToChangesOnly(node.children)
- 
+        let (prunedChildren, childKeys) = pruneToChangesOnly(node.children)
+
         let selfIsChanged: Bool = {
             if case .unchanged = node.status { return false }
             return true
         }()
- 
+
         if selfIsChanged || !prunedChildren.isEmpty {
-            result.append(HierarchyNode(objekt: node.objekt, status: node.status, children: prunedChildren))
+            let newNode = HierarchyNode(id: node.id, objekt: node.objekt, status: node.status, children: prunedChildren)
+            resultNodes.append(newNode)
+
+            // Sammle die Keys der Kinder und füge den eigenen Key hinzu, falls Kinder existieren
+            expandedKeys.formUnion(childKeys)
+            if !prunedChildren.isEmpty {
+                expandedKeys.insert(newNode.id)
+            }
         }
     }
-    return result
+
+    return (resultNodes, expandedKeys)
 }

@@ -7,36 +7,36 @@
 import SwiftUI
 import Foundation
 
-/// Filter-Kategorien für die Darstellung
-enum FilterCategory: String, CaseIterable, Identifiable {
-    case all
+enum FilterStatus: String, CaseIterable, Identifiable, Sendable {
+    case added = "Neu"
+    case removed = "Entfernt"
+    case modified = "Geändert"
+    case unchanged = "Unverändert"
+    
+    var id: String { rawValue }
+}
+
+/// Sendable Snapshot eines Knotens für Background-Filterung
+private enum StatusSnapshot: Sendable, Equatable {
     case added
     case removed
     case modified
     case unchanged
     
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .all: return "Alle"
-        case .added: return "Neu"
-        case .removed: return "Entfernt"
-        case .modified: return "Geändert"
-        case .unchanged: return "Unverändert"
+    nonisolated static func == (lhs: StatusSnapshot, rhs: StatusSnapshot) -> Bool {
+        switch (lhs, rhs) {
+        case (.added, .added): return true
+        case (.removed, .removed): return true
+        case (.modified, .modified): return true
+        case (.unchanged, .unchanged): return true
+        default: return false
         }
     }
 }
 
-/// Sendable Snapshot eines Knotens für Background-Filterung
-private enum StatusSnapshot: Sendable {
-    case added
-    case removed
-    case modified
-    case unchanged
-}
-
 private struct NodeSnapshot: Sendable {
-    let key: String
+    let id: String
+    let itemkey: String
     let beschreibung: String
     let sachnummer: String
     let inventarnummer: String
@@ -60,7 +60,7 @@ private func collectVisibleKeysFromSnapshots(
     for node in nodes {
         let childrenMatch = collectVisibleKeysFromSnapshots(node.children, predicate: predicate, into: &set)
         if predicate(node) || childrenMatch {
-            set.insert(node.key)
+            set.insert(node.id)
             anyMatch = true
         }
     }
@@ -94,12 +94,16 @@ class XLSXViewModel {
     var errorMessage: String?
 
     private(set) var fullHierarchyRoots: [HierarchyNode] = []
+    private(set) var prunedHierarchyRoots: [HierarchyNode] = []
+    
+    private(set) var defaultExpandedFull: Set<String> = []
+    private(set) var defaultExpandedPruned: Set<String> = []
     
     enum DocumentSlot { case old, new }
 
     // MARK: - Search & Filter State
     var searchText: String = ""
-    var selectedCategory: FilterCategory = .all
+    var selectedStatuses: Set<FilterStatus> = [.added, .removed, .modified]
     var showOnlyDuplicates: Bool = false
 
     // MARK: - Visibility & Expansion State
@@ -133,7 +137,7 @@ class XLSXViewModel {
         diff = nil
         errorMessage = nil
         searchText = ""
-        selectedCategory = .all
+        selectedStatuses = [.added, .removed, .modified]
         showOnlyDuplicates = false
         visibleKeysCache = []
         expandedKeys = []
@@ -146,29 +150,34 @@ class XLSXViewModel {
     /// Converts HierarchyNode tree into Sendable snapshots for background processing
     private func buildSnapshots(from nodes: [HierarchyNode]) -> [NodeSnapshot] {
         nodes.map { node in
+            
             let statusSnap: StatusSnapshot
-            var oldB: String? = nil
-            var oldS: String? = nil
-            var oldI: String? = nil
-            var oldG: String? = nil
-
+            var oldB: String?
+            var oldS: String?
+            var oldI: String?
+            var oldG: String?
+            
+            // 1. Status und alte Werte sauber über Pattern Matching extrahieren
             switch node.status {
             case .added:
                 statusSnap = .added
             case .removed:
                 statusSnap = .removed
-            case .modified(let old):
+            case .modified(let oldObj):
+                // Hier entpacken wir das assoziierte alte Objekt!
                 statusSnap = .modified
-                oldB = old.Beschreibung
-                oldS = old.Sachnummer
-                oldI = old.Inventarnummer
-                oldG = old.Geraetenummer
+                oldB = oldObj.Beschreibung
+                oldS = oldObj.Sachnummer
+                oldI = oldObj.Inventarnummer
+                oldG = oldObj.Geraetenummer
             case .unchanged:
                 statusSnap = .unchanged
             }
-
+            
+            // 2. Thread-sicheren Snapshot für den Hintergrund-Task erstellen
             return NodeSnapshot(
-                key: node.objekt.key,
+                id: node.id,
+                itemkey: node.objekt.key,
                 beschreibung: node.objekt.Beschreibung,
                 sachnummer: node.objekt.Sachnummer,
                 inventarnummer: node.objekt.Inventarnummer,
@@ -195,13 +204,13 @@ class XLSXViewModel {
 
         // Capture filter state as Sendable copies
         let query = self.searchText
-        let category = self.selectedCategory
+        let activeStatuses = self.selectedStatuses
         let onlyDup = self.showOnlyDuplicates
         let dupOld = self.diff?.duplicateKeysOld ?? []
         let dupNew = self.diff?.duplicateKeysNew ?? []
 
         // Start detached background task
-        visibleKeysTask = Task.detached { [snapshots, query, category, onlyDup, dupOld, dupNew] in
+        visibleKeysTask = Task.detached { [snapshots, query, activeStatuses, onlyDup, dupOld, dupNew] in
             // Debounce sleep (cancellable)
             do {
                 try await Task.sleep(nanoseconds: debounceMillis * 1_000_000)
@@ -214,6 +223,22 @@ class XLSXViewModel {
             // Build predicate for filtering on snapshots (pure, Sendable)
             let lowerQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
+            if lowerQuery.isEmpty && activeStatuses == [.added,.removed,.modified] && !onlyDup {
+            // Einfach alle vorhandenen Keys übernehmen statt rekursiv zu filtern!
+            var allKeys = Set<String>()
+            func collectAll(from nodes: [NodeSnapshot]) {
+                for n in nodes {
+                    allKeys.insert(n.id)
+                    collectAll(from: n.children)
+                }
+            }
+            collectAll(from: snapshots)
+            
+            if !Task.isCancelled {
+                await MainActor.run { self.visibleKeysCache = allKeys }
+            }
+            return
+        }
             let predicate: @Sendable (NodeSnapshot) -> Bool = { node in
                 // 1. Suchtext-Prüfung
                 if !lowerQuery.isEmpty {
@@ -233,31 +258,26 @@ class XLSXViewModel {
                 }
 
                 // 2. Kategorie-Filter
-                switch category {
-                case .all:
-                    break
-                case .added:
-                    if case .added = node.status {} else { return false }
-                case .removed:
-                    if case .removed = node.status {} else { return false }
-                case .modified:
-                    if case .modified = node.status {} else { return false }
-                case .unchanged:
-                    if case .unchanged = node.status {} else { return false }
-                }
-                // Duplicate filtering
-                if onlyDup {
-                    if !dupOld.contains(node.key) && !dupNew.contains(node.key) {
-                        return false
-                    }
-                }
+                let matchesStatus: Bool = {
+                            switch node.status {
+                            case .added: return activeStatuses.contains(.added)
+                            case .removed: return activeStatuses.contains(.removed)
+                            case .modified: return activeStatuses.contains(.modified)
+                            case .unchanged: return activeStatuses.contains(.unchanged)
+                            }
+                        }()
+                        if !matchesStatus { return false }
+
+                        if onlyDup {
+                            if !dupOld.contains(node.itemkey) && !dupNew.contains(node.itemkey) { return false }
+                        }
 
                 return true
             }
 
             // FIX: Nutze lokale Variable statt inout-Mutation in Task.detached
             var keys = Set<String>()
-            _ = collectVisibleKeysFromSnapshots(snapshots, predicate: predicate, into: &keys)
+            _ = await collectVisibleKeysFromSnapshots(snapshots, predicate: predicate, into: &keys)
 
             if Task.isCancelled { return }
 
@@ -292,19 +312,26 @@ class XLSXViewModel {
     // MARK: - Private Helpers
 
     private func recomputeDiffIfPossible() {
-        guard let oldDocument, let newDocument else { return }
+            guard let oldDocument, let newDocument else { return }
 
-        // diff(against:) berechnet die Parents nun intern
-        let newDiff = oldDocument.diff(against: newDocument)
-        diff = newDiff
+            let newDiff = oldDocument.diff(against: newDocument)
+            diff = newDiff
 
-        // buildFullHierarchy berechnet die Parents ebenfalls selbst aus den übergebenen Listen
-        fullHierarchyRoots = buildFullHierarchy(
-            newItems: newDocument.inventurliste,
-            oldItems: oldDocument.inventurliste,
-            diff: newDiff
-        )
+            // 1. Vollständigen Baum erstellen
+            fullHierarchyRoots = buildFullHierarchy(
+                newItems: newDocument.inventurliste,
+                oldItems: oldDocument.inventurliste,
+                diff: newDiff
+            )
 
-        scheduleRecomputeVisibleKeysDetached()
-    }
+            // 2. Reduzierten Baum & Aufklapp-Keys in EINEM Durchlauf berechnen
+            let (pruned, prunedExpanded) = pruneToChangesOnly(fullHierarchyRoots)
+            prunedHierarchyRoots = pruned
+            defaultExpandedPruned = prunedExpanded
+
+            // 3. Für den vollen Baum nur die Hauptkategorien (Ebene 0) aufklappen
+            defaultExpandedFull = Set(fullHierarchyRoots.map(\.id))
+
+            scheduleRecomputeVisibleKeysDetached()
+        }
 }
