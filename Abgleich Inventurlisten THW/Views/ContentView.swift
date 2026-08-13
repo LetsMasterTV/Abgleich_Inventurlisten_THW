@@ -50,6 +50,7 @@ struct ContentView: View {
     @State private var lastRequestedSlot: XLSXViewModel.DocumentSlot?
  
     // Bestätigungs-Popup beim Überschreiben eines bereits geladenen Slots
+    @State private var showResetConfirmation = false
     @State private var showOverwriteConfirmation = false
     @State private var pendingSlot: XLSXViewModel.DocumentSlot?
  
@@ -121,16 +122,40 @@ struct ContentView: View {
             }
             .padding()
             .navigationTitle("THW-Inventur Vergleichs Assistent")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(role: .destructive) {
-                        viewModel.reset()
-                    } label: {
-                        Label("Zurücksetzen", systemImage: "trash")
+                .navigationDestination(isPresented: Binding(
+                    get: { viewModel.diff != nil },
+                    set: { if !$0 { viewModel.reset() } }
+                )) {
+                    if let diff = viewModel.diff {
+                        DiffView(
+                            diff: diff,
+                            oldItems: viewModel.oldDocument?.inventurliste ?? [],
+                            newItems: viewModel.newDocument?.inventurliste ?? [],
+                            viewModel: viewModel
+                        )
+                        .navigationTitle("Vergleichsergebnis")
                     }
-                    .disabled(viewModel.oldDocument == nil && viewModel.newDocument == nil)
                 }
-            }
+                .toolbar {
+                                ToolbarItem(placement: .primaryAction) {
+                                    Button(role: .destructive) {
+                                        showResetConfirmation = true // Alert auslösen
+                                    } label: {
+                                        Label("Zurücksetzen", systemImage: "trash")
+                                    }
+                                    .disabled(viewModel.oldDocument == nil && viewModel.newDocument == nil)
+                                }
+                            }
+                            // ALERT: Bestätigung für Reset
+                            .alert("Wirklich zurücksetzen?", isPresented: $showResetConfirmation) {
+                                Button("Abbrechen", role: .cancel) { }
+                                Button("Löschen & Zurück", role: .destructive) {
+                                    viewModel.reset() // Hier werden Daten gelöscht, Diff wird nil, Navigation springt zurück
+                                }
+                            } message: {
+                                Text("Alle geladenen Daten werden verworfen und Sie kehren zur Dateiauswahl zurück.")
+                            }
+            
         }
         .fileImporter(isPresented: isImporterPresented, allowedContentTypes: [.xlsx]) { result in
             guard let slot = activeSlot ?? lastRequestedSlot else { return }
