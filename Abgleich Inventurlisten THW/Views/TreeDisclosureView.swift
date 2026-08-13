@@ -39,7 +39,7 @@ struct TreeDisclosureView: View {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
                             .frame(width: 2)                  // Dicke des Strichs (2 pt)
-                            .padding(.leading, 7)             // Perfekt zentriert unter dem 16pt-Pfeil
+                            .padding(.leading, 20)             // Perfekt zentriert unter dem 16pt-Pfeil
                             .padding(.vertical, 2)
                         
                         LazyVStack(alignment: .leading, spacing: 2) {

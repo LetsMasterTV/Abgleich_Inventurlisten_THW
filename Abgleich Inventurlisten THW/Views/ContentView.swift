@@ -106,7 +106,7 @@ struct ContentView: View {
                 }
             }
             .padding()
-            .navigationTitle("XLSX Vergleich")
+            .navigationTitle("THW-Inventur Vergleichs Assistent")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(role: .destructive) {

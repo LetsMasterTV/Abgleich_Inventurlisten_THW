@@ -39,6 +39,7 @@ struct DiffView: View {
     
     // Breadcrumb-Pfad
     @State private var breadcrumbParts: [String] = []
+    @State private var nodePositions: [UUID: CGFloat] = [:]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -70,9 +71,6 @@ struct DiffView: View {
                     ScrollSection
                 }
                 .coordinateSpace(name: "scrollSpace")
-                .onPreferenceChange(NodePositionPreferenceKey.self) { positions in
-                    updateBreadcrumbFromPositions(positions)
-                }
                 .onAppear {
                     rebuildTree()
                 }
@@ -156,7 +154,7 @@ struct DiffView: View {
             HStack {
                 Toggle("Unveränderte Einträge einblenden", isOn: $showUnchanged)
                     .toggleStyle(.switch)
-                Toggle("Beschreibungen ausblenden", isOn: $hideDescriptions)
+                Toggle("Überschriften ausblenden", isOn: $hideDescriptions)
                     .toggleStyle(.switch)
                 Spacer()
                 Button("▼ Alle", action: expandAll)
@@ -302,18 +300,29 @@ struct DiffView: View {
             }
         }
         .padding(.vertical, 1)
-        .modifier(PositionTrackingModifier(nodeID: node.id, track: (Int(node.objekt.Ebene) ?? 0) <= 1))
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.frame(in: .named("scrollSpace")).minY
+        } action: { newMinY in
+            nodePositions[node.id] = newMinY
+            updateBreadcrumbFromTracker()
+        }
+        .onDisappear {
+            nodePositions.removeValue(forKey: node.id)
+        }
     }
     
     // MARK: - Position & Breadcrumb Calculation
     
     
-    private func updateBreadcrumbFromPositions(_ positions: [NodePositionData]) {
-        let visible = positions.filter { $0.minY >= -20 }
-        
-        guard let topNode = visible.min(by: { $0.minY < $1.minY }) else { return }
-        
-        computeBreadcrumb(for: topNode.id)
+    private func updateBreadcrumbFromTracker() {
+        guard !nodePositions.isEmpty else { return }
+
+        let passed = nodePositions.filter { $0.value <= 20 }
+        let topID = passed.max(by: { $0.value < $1.value })?.key
+            ?? nodePositions.min(by: { $0.value < $1.value })?.key
+
+        guard let topID else { return }
+        computeBreadcrumb(for: topID)
     }
     
     private func computeBreadcrumb(for id: UUID) {
