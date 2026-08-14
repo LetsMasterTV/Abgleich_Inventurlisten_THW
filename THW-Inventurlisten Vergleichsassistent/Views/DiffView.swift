@@ -103,7 +103,7 @@ struct DiffView: View {
     
     private var ScrollSection: some View {
         ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading) {
                     ForEach(displayedRoots) { root in
                         if viewModel.visibleKeys.contains(root.id) {
                             TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
@@ -112,10 +112,11 @@ struct DiffView: View {
 
                             Divider()
                                 .padding(.vertical, 4)
-                                .opacity(0.3)
+                                .opacity(0.5)
                         }
                     }
                     .padding(.leading, 10)
+                    .padding(.top, 10)
                 }
             }
             .background(Color(.controlBackgroundColor))
@@ -125,6 +126,7 @@ struct DiffView: View {
             .overlay(RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             )
+            .padding(.horizontal, 12)
             .padding(.vertical, 12)
          .coordinateSpace(name: "scrollSpace")
          .onAppear {
@@ -351,7 +353,6 @@ struct DiffView: View {
         }
         .background(node.children.isEmpty ? rowColor(for: node) : Color.clear)
         .cornerRadius(6)
-        .padding(.vertical, 2)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named("scrollSpace")).minY
         } action: { newMinY in

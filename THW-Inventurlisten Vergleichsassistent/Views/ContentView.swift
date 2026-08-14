@@ -66,6 +66,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 30) {
+                Spacer()
                 HStack {
                     Spacer()
                     VStack {
@@ -82,7 +83,7 @@ struct ContentView: View {
                         )
                     }
                     Spacer()
-
+                    
                     VStack {
                         Button("") {
                             requestFile(for: .new)
@@ -95,7 +96,7 @@ struct ContentView: View {
                                 isSelected: viewModel.newDocument != nil
                             )
                         )
-                      
+                        
                     }
                     Spacer()
                 }
@@ -105,7 +106,21 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                         .font(.caption)
                 }
- 
+                
+                
+                Spacer()
+                Text("Bitte beide Dateien auswählen")
+                    .foregroundStyle(.primary)
+                    .font(.title)
+                    .bold()
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("THW-Inventur Vergleichs Assistent")
+            .navigationDestination(isPresented: Binding(
+                get: { viewModel.diff != nil },
+                set: { if !$0 { viewModel.reset() } }
+            )) {
                 if let diff = viewModel.diff {
                     DiffView(
                         diff: diff,
@@ -113,31 +128,12 @@ struct ContentView: View {
                         newItems: viewModel.newDocument?.inventurliste ?? [],
                         viewModel: viewModel
                     )
-                    } else {
-                    Spacer()
-                    Text("Bitte beide Dateien auswählen")
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                    .navigationTitle("Vergleichsergebnis")
                 }
             }
-            .padding()
-            .navigationTitle("THW-Inventur Vergleichs Assistent")
-                .navigationDestination(isPresented: Binding(
-                    get: { viewModel.diff != nil },
-                    set: { if !$0 { viewModel.reset() } }
-                )) {
-                    if let diff = viewModel.diff {
-                        DiffView(
-                            diff: diff,
-                            oldItems: viewModel.oldDocument?.inventurliste ?? [],
-                            newItems: viewModel.newDocument?.inventurliste ?? [],
-                            viewModel: viewModel
-                        )
-                        .navigationTitle("Vergleichsergebnis")
-                    }
-                }
-                
+            
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fileImporter(isPresented: isImporterPresented, allowedContentTypes: [.xlsx]) { result in
             guard let slot = activeSlot ?? lastRequestedSlot else { return }
             handle(result, as: slot)

@@ -120,7 +120,7 @@ struct ModifiedBestandsobjektRow: View {
             
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
         .padding(.horizontal, 10)
         .fixedSize(horizontal: true, vertical: false)
     }

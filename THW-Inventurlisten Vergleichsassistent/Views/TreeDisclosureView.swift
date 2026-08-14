@@ -12,6 +12,8 @@ struct TreeDisclosureView<Content: View>: View {
     let visibleKeys: Set<String>
     @ViewBuilder let content: (HierarchyNode) -> Content
 
+    private let globalSpacing: CGFloat = 8
+    
     @ViewBuilder
     var body: some View {
         
@@ -30,17 +32,16 @@ struct TreeDisclosureView<Content: View>: View {
                 content(node)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                
-                
                 DisclosureGroup(isExpanded: isExpanded) {
-                    HStack(alignment: .top, spacing: 10) {
+                    HStack(alignment: .top, spacing: 5) {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
                             .frame(width: 2)                  // Dicke des Strichs (2 pt)
-                            .padding(.leading, 20)             // Perfekt zentriert unter dem 16pt-Pfeil
+                            .padding(.leading, 20)
+                            .padding(.top, -globalSpacing - 4)    // Zieht den Strich nach oben in den Header-Bereich hinein
                         
                         
-                        LazyVStack(alignment: .leading, spacing: 2) {
+                        LazyVStack(alignment: .leading, spacing: 0) { // TODO: Abstand einstellen
                             ForEach(visibleChildren) { child in
                                 TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
                                     .padding(.leading, 8)
@@ -48,6 +49,7 @@ struct TreeDisclosureView<Content: View>: View {
                         }
                         .padding(.leading, 5)
                     }
+                    .padding(.top, -4)
                 } label: {
                     content(node)
                 }

@@ -10,7 +10,7 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
     let backgroundColor: Color
 
     func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) { // TODO: Abstand einstellen
             // Der Header (Pfeil + Label)
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -27,7 +27,7 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
                     configuration.label
                 }
                 .padding(.vertical, 4)
-                .padding(.leading, 8)
+                .padding(.leading, 10)
                 .padding(.trailing, 6)
                 .background(backgroundColor) // Färbt JETZT Pfeil + Label gemeinsam ein!
                 .cornerRadius(6)
@@ -37,7 +37,8 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
             // Der aufgeklappte Inhalt (Kinder)
             if configuration.isExpanded {
                 configuration.content
-                    .padding(.top, 8)
+                    .padding(.top, 0) // TODO: Abstand einstellen
+                    .padding(.bottom, 5) //Abstand nach allen Kinder Elementen
             }
         }
     }

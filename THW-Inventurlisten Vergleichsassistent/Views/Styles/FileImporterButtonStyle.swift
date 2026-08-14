@@ -30,13 +30,13 @@ struct FileImporterButtonStyle: ButtonStyle {
             // Text-Informationen
             VStack(spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(THW_gelb)
                 
                 if let subtitle = subtitle {
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.headline)
                         .foregroundColor(THW_gelb)
                 }
             }
@@ -54,7 +54,7 @@ struct FileImporterButtonStyle: ButtonStyle {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(
                     style: isSelected ? StrokeStyle(lineWidth: 2) : StrokeStyle(lineWidth: 2, dash: [8, 6]))
-                        .foregroundColor(isSelected ? .green : (configuration.isPressed ? .accentColor : .accentColor.opacity(0.4)))
+                        .foregroundColor(isSelected ? .green : (configuration.isPressed ? THW_gelb : THW_gelb.opacity(0.4)))
                 )
         .overlay(
                     Group {
