@@ -34,9 +34,9 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		2A1C8C172FFD2F5A00B768A2 /* Abgleich Inventurlisten THW */ = {
+		2A1C8C172FFD2F5A00B768A2 /* THW-Inventurlisten Vergleichsassistent */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Abgleich Inventurlisten THW";
+			path = "THW-Inventurlisten Vergleichsassistent";
 			sourceTree = "<group>";
 		};
 		2A491C6C300505320052E45E /* Abgleich Inventurlisten THW 2026-07-13 13-33-32 */ = {
@@ -75,7 +75,7 @@
 		2A1C8C0C2FFD2F5900B768A2 = {
 			isa = PBXGroup;
 			children = (
-				2A1C8C172FFD2F5A00B768A2 /* Abgleich Inventurlisten THW */,
+				2A1C8C172FFD2F5A00B768A2 /* THW-Inventurlisten Vergleichsassistent */,
 				2A1C8C162FFD2F5A00B768A2 /* Products */,
 				2A491C6C300505320052E45E /* Abgleich Inventurlisten THW 2026-07-13 13-33-32 */,
 			);
@@ -107,7 +107,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				2A1C8C172FFD2F5A00B768A2 /* Abgleich Inventurlisten THW */,
+				2A1C8C172FFD2F5A00B768A2 /* THW-Inventurlisten Vergleichsassistent */,
 				2A491C6C300505320052E45E /* Abgleich Inventurlisten THW 2026-07-13 13-33-32 */,
 			);
 			name = "Abgleich Inventurlisten THW";
@@ -181,7 +181,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 2A1C8C102FFD2F5900B768A2 /* Build configuration list for PBXProject "Abgleich Inventurlisten THW" */;
+			buildConfigurationList = 2A1C8C102FFD2F5900B768A2 /* Build configuration list for PBXProject "THW-Inventurlisten Vergleichsassistent" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -412,13 +412,13 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 6;
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Debug;
@@ -454,13 +454,13 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 6;
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Release;
@@ -566,7 +566,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		2A1C8C102FFD2F5900B768A2 /* Build configuration list for PBXProject "Abgleich Inventurlisten THW" */ = {
+		2A1C8C102FFD2F5900B768A2 /* Build configuration list for PBXProject "THW-Inventurlisten Vergleichsassistent" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2A1C8C342FFD2F5F00B768A2 /* Debug */,

@@ -1,0 +1,2448 @@
+//
+//  File.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 07.07.2026.
+//
+
+import Foundation
+
+/// A value type that represents an inventory item (Bestandsobjekt) used for comparing and tracking changes across data sources.
+///
+/// Conforms to:
+/// - Identifiable: Each instance carries a unique, stable `id` created at initialization time.
+/// - Equatable: Equality is defined by comparing all semantic fields (excluding `id`).
+///
+/// Parameter:
+/// - id: A unique identifier (UUID) for UI identity and list diffing. Not considered in equality.
+/// - Expected (not sorted) Table Headers in the XLSX Files
+///     - `Ebene`
+///     - `Art`
+///     - `STAN_soll`
+///     - `Menge_ist`
+///     - `THWin_Bestand`
+///     - `Fahrzeug_Bestand`
+///     - `Beschreibung`
+///     - `Sachnummer`
+///     - `Inventarnummer`
+///     - `Geraetenummer`
+///     - `Status`
+///
+/// Computed properties:
+/// - key: A composite key combining `Sachnummer` and `Inventarnummer`, useful for grouping or lookups.
+///
+/// Initialization:
+/// - init?(from dict: [String: String]): Failable initializer that builds an instance from a dictionary of CSV/column values.
+///   It trims surrounding whitespaces for all known keys. Returns `nil` if the dictionary is empty.
+///   Expected keys (case-sensitive): "Ebene", "Art", "STAN soll", "Menge Ist", "THWin Bestand",
+///   "Bestand Fahrzeug", "Beschreibung", "Sachnummer", "Inventarnummer", "Geraetenummer", "Status".
+///
+/// Equality:
+/// - Two instances are equal if all semantic fields (excluding `id`) match exactly after initialization/trimming.
+///
+/// Change tracking:
+/// - FieldChange: Nested type describing a single field change with a human-readable `label`,
+///   the `oldValue`, and the `newValue`.
+/// - fieldChanges(from:to:): Produces a list of `FieldChange` entries for all fields that differ
+///   between two `Bestandsobjekt` values. Useful for diff views and audit logs.
+    
+    
+    /// Returns a Boolean value indicating whether two Bestandsobjekt values are equal.
+    ///
+    /// Two instances are considered equal when all semantic fields match exactly,
+    /// excluding the auto-generated `id`. The comparison includes:
+    /// - `Ebene`
+    /// - `Art`
+    /// - `STAN_soll`
+    /// - `Menge_ist`
+    /// - `THWin_Bestand`
+    /// - `Fahrzeug_Bestand`
+    /// - `Beschreibung`
+    /// - `Sachnummer`
+    /// - `Inventarnummer`
+    /// - `Geraetenummer`
+    /// - `Status`
+    ///
+    /// - Parameters:
+    ///   - lhs: The left-hand side Bestandsobjekt to compare.
+    ///   - rhs: The right-hand side Bestandsobjekt to compare.
+    /// - Returns: `true` if all listed fields are equal; otherwise, `false`.
+    /// - Note: The `id` property is intentionally ignored to allow semantic equality
+    ///   independent of instance identity, which is useful for diffing and change tracking.
+
+    struct Bestandsobjekt: Identifiable, Equatable {
+        let id = UUID()
+        let Zeile: Int   // Original-Zeilennummer aus der Excel-Datei – stabile Reihenfolge für den Hierarchie-Aufbau
+        let Ebene: String
+        let Ortseinheit: String
+        let Art: String
+        let Fremdbeschaft: String
+        let Menge_STAN: String
+        let Menge_ist: String
+        let Verfuegbar: String
+        let Beschreibung: String
+        let Sachnummer: String
+        let Inventarnummer: String
+        let Geraetenummer: String
+        let Status: String
+     
+        /// Stabiler Schlüssel zur Zuordnung zwischen zwei Dateien.
+        /// Getrimmte Werte, da Excel-Zellen oft mit führenden/nachgestellten Leerzeichen befüllt sind.
+        var key: String { Ebene + " " + Inventarnummer + " " + Sachnummer }
+     
+        // Manuelles Equatable: die zufällige UUID und die Zeilennummer dürfen NICHT mit verglichen werden –
+        // eine Zeile kann in der neuen Datei an anderer Position stehen, ohne inhaltlich "geändert" zu sein.
+        static func == (lhs: Bestandsobjekt, rhs: Bestandsobjekt) -> Bool {
+            lhs.Ebene == rhs.Ebene &&
+            lhs.Ortseinheit == rhs.Ortseinheit &&
+            lhs.Art == rhs.Art &&
+            lhs.Fremdbeschaft == rhs.Fremdbeschaft &&
+            lhs.Menge_STAN == rhs.Menge_STAN &&
+            lhs.Menge_ist == rhs.Menge_ist &&
+            lhs.Verfuegbar == rhs.Verfuegbar &&
+            lhs.Beschreibung == rhs.Beschreibung &&
+            lhs.Sachnummer == rhs.Sachnummer &&
+            lhs.Inventarnummer == rhs.Inventarnummer &&
+            lhs.Geraetenummer == rhs.Geraetenummer &&
+            lhs.Status == rhs.Status
+        }
+     
+        /// Baut ein Bestandsobjekt aus einem [Spaltenname: Wert]-Dictionary einer Excel-Zeile.
+        /// Fehlende Werte (leere Zellen) werden als leerer String behandelt, NICHT als Abbruchgrund –
+        /// sonst würde fast jede Zeile verworfen, sobald irgendein Feld leer ist.
+        init?(from dict: [String: String], zeile: Int) {
+            guard !dict.isEmpty else { return nil }
+     
+            self.Zeile = zeile
+            self.Ebene = (dict["Ebene"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Ortseinheit = (dict["OE"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Art = (dict["Art"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Fremdbeschaft = (dict["FB"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Menge_STAN = (dict["Menge"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Menge_ist = (dict["Menge Ist"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Verfuegbar = (dict["Verfügbar"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Beschreibung = (dict["Ausstattung | Hersteller | Typ"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Sachnummer = (dict["Sachnummer"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Inventarnummer = (dict["Inventar Nr"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Geraetenummer = (dict["Gerätenr."] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Status = (dict["Status"] ?? "").trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+/// A value type that represents an inventory item (Bestandsobjekt) used for importing,
+/// comparing, and tracking changes across data sources (e.g., XLSX/CSV).
+///
+/// Purpose:
+/// - Encapsulates all relevant fields of a THW inventory record.
+/// - Provides semantic equality (ignores `id`) for diffing and change detection.
+/// - Supplies utilities to compute human‑readable field changes.
+///
+/// Identity:
+/// - Conforms to `Identifiable` with a stable `id` (UUID) generated at initialization time.
+/// - The `id` is not part of semantic equality and is intended for UI identity and list diffing.
+///
+/// Equality:
+/// - Conforms to `Equatable`.
+/// - Two instances are equal if and only if all semantic fields match exactly:
+///   `Ebene`, `Art`, `STAN_soll`, `Menge_ist`, `THWin_Bestand`, `Fahrzeug_Bestand`,
+///   `Beschreibung`, `Sachnummer`, `Inventarnummer`, `Geraetenummer`, `Status`.
+/// - The `id` is intentionally ignored during equality checks.
+///
+/// Fields:
+/// - Ebene: The organizational or structural level of the item.
+/// - Art: The type/category of the item.
+/// - STAN_soll: Target/authorized quantity according to STAN.
+/// - Menge_ist: Actual counted quantity.
+/// - THWin_Bestand: Quantity recorded in THWin.
+/// - Fahrzeug_Bestand: Quantity present on vehicles.
+/// - Beschreibung: Human‑readable description of the item.
+/// - Sachnummer: Catalog/article number; often used for grouping or matching.
+/// - Inventarnummer: Inventory number; often unique per physical asset.
+/// - Geraetenummer: Device number or equipment identifier.
+/// - Status: Current status or condition of the item.
+///
+/// Derived Values:
+/// - key: Composite lookup key combining `Sachnummer` and `Inventarnummer`.
+///
+/// Initialization:
+/// - init?(from dict: [String: String])
+///   - Failable initializer that populates all fields from a dictionary (e.g., a parsed CSV/XLSX row).
+///   - Trims surrounding whitespaces for all recognized keys.
+///   - Returns `nil` if the provided dictionary is empty.
+///   - Expected (case‑sensitive) keys:
+///     - "Ebene"
+///     - "Art"
+///     - "STAN soll"
+///     - "Menge Ist"
+///     - "THWin Bestand"
+///     - "Bestand Fahrzeug"
+///     - "Beschreibung"
+///     - "Sachnummer"
+///     - "Inventarnummer"
+///     - "Geraetenummer"
+///     - "Status"
+///
+/// Change Tracking:
+/// - Nested type `FieldChange` describes a single differing field with:
+///   - `label`: Human‑readable field name.
+///   - `oldValue`: Value in the source (old) record.
+///   - `newValue`: Value in the target (new) record.
+/// - `fieldChanges(from:to:)` computes a list of `FieldChange` entries for all fields that differ
+///   between two `Bestandsobjekt` instances, enabling detailed diff views and audit logs.
+///
+/// Usage Notes:
+/// - Use semantic equality (==) to determine whether two records represent the same data,
+///   regardless of their `id`.
+/// - Use `key` when a compact, human‑readable grouping or dictionary key is needed.
+/// - When importing from spreadsheets, ensure headers match the expected keys exactly (including case and spaces).
+extension Bestandsobjekt {
+    struct FieldChange: Identifiable {
+        let id = UUID()
+        let label: String
+        let oldValue: String
+        let newValue: String
+    }
+
+    /// Computes a list of human‑readable field differences between two Bestandsobjekt values.
+    ///
+    /// This helper compares each semantic field of the provided records (excluding `id`)
+    /// and returns an array of `FieldChange` entries for every field whose value has changed.
+    /// Each `FieldChange` contains a `label` (localized/CSV header name), the `oldValue` from
+    /// the source record, and the `newValue` from the target record.
+    ///
+    /// Fields compared (in order):
+    /// - "Ebene"
+    /// - "Art"
+    /// - "STAN soll"
+    /// - "Menge Ist"
+    /// - "THWin Bestand"
+    /// - "Bestand Fahrzeug"
+    /// - "Beschreibung"
+    /// - "Sachnummer"
+    /// - "Inventarnummer"
+    /// - "Gerätenummer"
+    /// - "Status"
+    ///
+    /// - Parameters:
+    ///   - old: The source (baseline) Bestandsobjekt to compare from.
+    ///   - new: The target Bestandsobjekt to compare to.
+    /// - Returns: An array of `FieldChange` entries for all differing fields. The array is empty if no differences are found.
+    /// - Note: String comparisons are exact (case‑sensitive) and performed after any trimming that occurred during initialization.
+    /// - Use‑case: Ideal for building diff views, audit logs, or change summaries when importing or reconciling inventory data.
+    static func fieldChanges(from old: Bestandsobjekt, to new: Bestandsobjekt) -> [FieldChange] {
+        var changes: [FieldChange] = []
+
+        func compare(_ label: String, _ oldValue: String, _ newValue: String) {
+            if oldValue != newValue {
+                changes.append(FieldChange(label: label, oldValue: oldValue, newValue: newValue))
+            }
+        }
+
+        compare("Ebene", old.Ebene, new.Ebene)
+        compare("OE", old.Ortseinheit, new.Ortseinheit)
+        compare("Art", old.Art, new.Art)
+        compare("FB", old.Art, new.Art)
+        compare("Menge", old.Menge_STAN, new.Menge_STAN)
+        compare("Menge Ist", old.Menge_ist, new.Menge_ist)
+        compare("Verfügbar", old.Verfuegbar, new.Verfuegbar)
+        compare("Ausstattung | Hersteller | Typ", old.Beschreibung, new.Beschreibung)
+        compare("Sachnummer", old.Sachnummer, new.Sachnummer)
+        compare("Inventar Nr", old.Inventarnummer, new.Inventarnummer)
+        compare("Gerätenr.", old.Geraetenummer, new.Geraetenummer)
+        compare("Status", old.Status, new.Status)
+
+        return changes
+    }
+}
+//
+//  HierarchieBaum.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 03.08.2026.
+//
+import Foundation
+
+enum NodeStatus {
+    case added
+    case removed
+    case modified(old: Bestandsobjekt)
+    case unchanged
+}
+ 
+final class HierarchyNode: Identifiable {
+    let id: String
+    let objekt: Bestandsobjekt
+    let status: NodeStatus
+    var children: [HierarchyNode]
+    weak var parent: HierarchyNode?
+ 
+    init(id: String, objekt: Bestandsobjekt, status: NodeStatus, children: [HierarchyNode] = []) {
+        self.id = id
+        self.objekt = objekt
+        self.status = status
+        self.children = children
+    }
+
+    var childrenOrNil: [HierarchyNode]? { children.isEmpty ? nil : children }
+}
+
+extension HierarchyNode {
+    // Hilfseigenschaft, um den unkomplizierten Fallback im UI zu prüfen
+    var statusIsUnchanged: Bool {
+        if case .unchanged = self.status { return true }
+        return false
+    }
+}
+
+ 
+/// Baut aus einer flachen, geordneten Liste (Original-Dateireihenfolge!) einen vollständigen Baum.
+/// Baut aus einer flachen, geordneten Liste (Original-Dateireihenfolge!) einen vollständigen Baum.
+func buildFullHierarchy(
+    newItems: [Bestandsobjekt],
+    oldItems: [Bestandsobjekt],
+    diff: XLSXDiff
+) -> [HierarchyNode] {
+    let newItemsSorted = newItems.sorted { $0.Zeile < $1.Zeile }
+    let oldItemsSorted = oldItems.sorted { $0.Zeile < $1.Zeile }
+
+    let addedIDs = Set(diff.added.map { $0.id })
+    let modifiedByID = Dictionary(uniqueKeysWithValues: diff.modified.map { ($0.new.id, $0.alt) })
+    let removedIDs = Set(diff.removed.map { $0.id })
+
+    func ermittleStatus(for item: Bestandsobjekt) -> NodeStatus {
+        if addedIDs.contains(item.id) { return .added }
+        if let old = modifiedByID[item.id] { return .modified(old: old) }
+        return .unchanged
+    }
+
+    var roots: [HierarchyNode] = []
+    var stack: [(level: Int, node: HierarchyNode)] = []
+
+    // Key-Mapping auf Basis des kombinierten Pfads, um präzise Elternzuordnung zu erlauben
+    var nodesByFullPath: [String: HierarchyNode] = [:]
+
+    let parentsNew = Inventurliste.computeParents(for: newItemsSorted)
+    let newPaths = Inventurliste.vollePfade(fuer: newItemsSorted, parents: parentsNew)
+
+    // 1. Neue und modifizierte Elemente in die Hierarchie einbauen
+    for item in newItemsSorted {
+        // Leere oder ungültige Ebenen werden als Hauptebene (0) gewertet
+        let level = Int(item.Ebene) ?? 0
+        let vollerPfad = newPaths[item.key] ?? item.key
+        let uniqueID = "\(vollerPfad) [Neu:#\(item.Zeile) \(item.key))]"
+        
+        let node = HierarchyNode(id: uniqueID, objekt: item, status: ermittleStatus(for: item))
+        nodesByFullPath[vollerPfad] = node
+        
+
+        while let last = stack.last, last.level >= level {
+            stack.removeLast()
+        }
+
+        // Wenn level 0 ist oder der Stack leer ist, ist es ein Wurzel-Element ganz oben (z.B. Fahrzeug)
+        if level == 0 || stack.isEmpty {
+            roots.append(node)
+        } else if let parent = stack.last {
+            parent.node.children.append(node)
+            node.parent = parent.node
+        } else {
+            roots.append(node)
+        }
+        stack.append((level, node))
+    }
+
+    // 2. DYNAMISCHE INJEKTION: Entfernte Objekte unter dem alten Eltern-Pfad einhängen
+    let parentsOld = Inventurliste.computeParents(for: oldItemsSorted)
+    let oldPaths = Inventurliste.vollePfade(fuer: oldItemsSorted, parents: parentsOld)
+    let removedOrdered = oldItemsSorted.filter { removedIDs.contains($0.id) }
+
+    for item in removedOrdered {
+
+        // Bestimme den exakten alten Pfad, an dem das gelöschte Objekt stand
+        let alterVollerPfad = oldPaths[item.key] ?? item.key
+        let uniqueID = "\(alterVollerPfad) [Alt:#\(item.Zeile) \(item.key)]"
+        let node = HierarchyNode(id: uniqueID, objekt: item, status: .removed)
+
+        
+        nodesByFullPath[alterVollerPfad] = node
+
+        // Finde den Vater-Knoten im neuen Anzeige-Baum über den alten Elternpfad
+        var attached = false
+        if let parentObjekt = parentsOld[item.key] {
+            let vaterPfad = oldPaths[parentObjekt.key] ?? parentObjekt.key
+
+            // Wenn der Vater im neuen Baum existiert, hänge das gelöschte Objekt dort an
+            if let parentNode = nodesByFullPath[vaterPfad] {
+                parentNode.children.append(node)
+                node.parent = parentNode
+                attached = true
+            }
+        }
+
+        if !attached {
+            roots.append(node) // Fallback an die Wurzel, falls der gesamte Ast gelöscht wurde
+        }
+    }
+
+    // Sortierung der Kinder nach originaler Excel-Reihenfolge wiederherstellen
+    func sortiereKinder(von knoten: HierarchyNode) {
+        knoten.children.sort { $0.objekt.Zeile < $1.objekt.Zeile }
+        for kind in knoten.children {
+            sortiereKinder(von: kind)
+        }
+    }
+    roots.sort { $0.objekt.Zeile < $1.objekt.Zeile }
+    for root in roots { sortiereKinder(von: root) }
+
+    return roots
+}
+
+
+/// Reduziert einen vollständigen Baum auf die Knoten, die SELBST geändert/neu/entfernt sind,
+/// oder mindestens einen solchen Nachfahren enthalten. Reine Kontext-Vorfahren bleiben erhalten
+/// (damit man überhaupt zur Änderung navigieren kann), rein unveränderte Äste fallen komplett weg.
+func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> (nodes: [HierarchyNode], expandedKeys: Set<String>) {
+    var resultNodes: [HierarchyNode] = []
+    var expandedKeys: Set<String> = []
+
+    for node in nodes {
+        let (prunedChildren, childKeys) = pruneToChangesOnly(node.children)
+
+        let selfIsChanged: Bool = {
+            if case .unchanged = node.status { return false }
+            return true
+        }()
+
+        if selfIsChanged || !prunedChildren.isEmpty {
+            let newNode = HierarchyNode(id: node.id, objekt: node.objekt, status: node.status, children: prunedChildren)
+            resultNodes.append(newNode)
+
+            // Sammle die Keys der Kinder und füge den eigenen Key hinzu, falls Kinder existieren
+            expandedKeys.formUnion(childKeys)
+            if !prunedChildren.isEmpty {
+                expandedKeys.insert(newNode.id)
+            }
+        }
+    }
+
+    return (resultNodes, expandedKeys)
+}
+//
+//  ViewModel.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 07.07.2026.
+//
+
+import Foundation
+import CoreXLSX
+import Combine
+
+
+/// A value type that represents an inventory list parsed from an .xlsx spreadsheet.
+///
+/// Inventurliste is responsible for:
+/// - Parsing an Excel (.xlsx) file from raw Data into a collection of Bestandsobjekt entries
+/// - Resolving cell values using CoreXLSX (shared strings, inline strings, or raw values)
+/// - Extracting header mappings from the first row of each worksheet to build row dictionaries
+/// - Providing a diff operation to compare two inventory lists and classify changes
+///
+/// Parsing behavior:
+/// - The initializer writes the provided Data to a temporary .xlsx file and uses CoreXLSX to read it.
+/// - It iterates through all workbooks and worksheets, reads the first row as headers, and then builds
+///   a dictionary per subsequent row using the column headers as keys.
+/// - Cell values are resolved in the following order: shared string, inline string, raw value, or "" if unavailable.
+/// - Rows that can be converted to Bestandsobjekt using Bestandsobjekt(from:) are appended to the list.
+/// - If SharedStrings are missing, the list will be empty and a warning is logged.
+/// - Temporary files are cleaned up automatically.
+///
+/// Error handling:
+/// - Throws ParseError.invalidFile if the .xlsx file cannot be opened.
+/// - Throws ParseError.noSheetFound if no sheet is found in the file (not currently thrown in the implementation).
+///
+/// Comparison:
+/// - The diff(against:) method compares two Inventurliste instances and returns an XLSXDiff:
+///   - added: items present only in the new list
+///   - removed: items present only in the old list
+///   - modified: items present in both lists but with differing content
+///   - unchanged: items identical across both lists
+/// - Duplicate keys are handled by buildDictionary(from:) which generates unique keys using a “#n” suffix
+///   for subsequent occurrences while tracking duplicates.
+///
+/// Dependencies:
+/// - CoreXLSX for reading .xlsx files
+/// - Bestandsobjekt for representing parsed rows
+/// - XLSXDiff for diff results
+///
+/// Notes:
+/// - Column addressing (e.g., “A”, “B”, …, “AA”) is translated to zero-based indices.
+/// - Header extraction pads missing columns with empty strings to maintain correct indexing.
+/// - This type is a lightweight wrapper around an immutable array; parsing happens only during initialization.
+struct Inventurliste {
+        let inventurliste: [Bestandsobjekt]
+     
+        enum ParseError: Error, LocalizedError {
+            case invalidFile
+            case noSheetFound
+     
+            var errorDescription: String? {
+                switch self {
+                case .invalidFile: return "Konnte xlsx-Datei nicht öffnen"
+                case .noSheetFound: return "Kein Sheet in der Datei gefunden"
+                }
+            }
+        }
+    /// initializes a 'Inventurliste' from a .xlsx file reading all rows over all Worksheets
+    ///
+    /// - Parameters:
+    ///    - Data: Die Hochgeladene XLSX Datei
+    init(data: Data) throws {
+        // Erstellen einer Temporären URL im Arbeitsspeicher'
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("xlsx")
+        
+        // Schiefgelaufener Kopier versuch bereinigen
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+            
+        try data.write(to: tempURL)
+        
+        guard let file = XLSXFile(filepath: tempURL.path) else {
+            throw ParseError.invalidFile
+        }
+        
+        do {
+            var tmp: [Bestandsobjekt] = []
+            guard let sharedStrings = try file.parseSharedStrings() else {
+                   print("⚠️ Keine SharedStrings in der Datei gefunden")
+                   self.inventurliste = []
+                   return
+               }
+
+            for wbk in try file.parseWorkbooks() {
+                for (_, path) in try file.parseWorksheetPathsAndNames(workbook: wbk) {
+                    let worksheet = try file.parseWorksheet(at: path)
+                    let allrows = worksheet.data?.rows ?? []
+                    // Header auslesen
+                    guard let headerows = allrows.first else { continue }
+                    
+                    let headers = Self.extractHeaders(from: headerows, sharedStrings: sharedStrings)
+                    var rowCounter = 0
+                    
+                    for row in allrows.dropFirst() {
+                        rowCounter += 1
+                        var dict: [String: String] = [:]
+                        for cell in row.cells {
+                            guard let idx = Self.columnIndex(fromLetters: cell.reference.column.value),
+                                  idx < headers.count else { continue }
+                            let header = headers[idx]
+                            guard !header.isEmpty else { continue }
+                            
+                            // Zellwert korrekt auflösen: Shared String zuerst, dann Inline-Text, dann Rohwert
+                            let resolvedValue = cell.stringValue(sharedStrings)
+                            ?? cell.inlineString?.text
+                            ?? cell.value
+                            ?? ""
+                            dict[header] = resolvedValue
+                        }
+                        
+                        if let objekt = Bestandsobjekt(from: dict, zeile: rowCounter) {
+                            tmp.append(objekt)
+                        }
+                    }
+                }
+            }
+            self.inventurliste = tmp
+        } catch {
+            print("Fehler beim Laden der Daten in die Inventurliste \(error)")
+            self.inventurliste = []
+        }
+        
+    }
+    
+    
+    /// Converts an Excel-style column label (e.g., "A", "Z", "AA", "BC") into a zero-based integer index.
+    ///
+    /// Excel columns are labeled using a base-26 alphabetic system where:
+    /// - "A" corresponds to index 0
+    /// - "B" corresponds to index 1
+    /// - ...
+    /// - "Z" corresponds to index 25
+    /// - "AA" corresponds to index 26
+    /// - "AB" corresponds to index 27, and so on.
+    ///
+    /// The conversion treats the string as a base-26 number with letters 'A' to 'Z' mapping to 1–26,
+    /// and then subtracts 1 from the final result to produce a zero-based index.
+    ///
+    /// Validation:
+    /// - Returns `nil` if the input contains characters outside A–Z/a–z.
+    ///
+    /// - Parameter letters: The Excel column label to convert. Case-insensitive.
+    /// - Returns: The zero-based column index if the label is valid; otherwise, `nil`.
+    private static func columnIndex(fromLetters letters: String) -> Int? {
+        var result = 0
+        for char in letters.uppercased() {
+            guard let ascii = char.asciiValue, ascii >= 65, ascii <= 90 else { return nil }
+            result = result * 26 + Int(ascii - 65 + 1)
+        }
+        return result - 1
+    }
+ 
+    
+    
+    /// Extracts the header titles from the first row of a worksheet, preserving column positions.
+    ///
+    /// This method interprets the provided row as the header row of a worksheet and returns an array
+    /// of header strings aligned by column index. Column references (e.g., A, B, AA) are translated
+    /// into zero-based indices to correctly position each header in the resulting array. Missing
+    /// or skipped columns are represented by empty strings to maintain proper alignment with the
+    /// worksheet's column structure.
+    ///
+    /// Cell value resolution order:
+    /// - Attempts to resolve a cell as a shared string using the provided `sharedStrings`.
+    /// - Falls back to the cell's inline string content.
+    /// - Falls back to the raw cell value.
+    /// - Defaults to an empty string if no content is available.
+    ///
+    /// Notes:
+    /// - Only cells with valid A–Z column references are considered.
+    /// - The resulting array length is determined by the highest populated column index in the row,
+    ///   ensuring the array is large enough to include all present headers.
+    ///
+    /// - Parameters:
+    ///   - row: The worksheet row assumed to contain header cells.
+    ///   - sharedStrings: The shared strings table used to resolve shared-string cell values.
+    /// - Returns: An array of header titles, where each element corresponds to a column index. Empty
+    ///            strings indicate columns without a header value or missing cells.
+    private static func extractHeaders(from row: Row, sharedStrings: SharedStrings) -> [String] {
+        let maxIndex = row.cells
+            .compactMap { columnIndex(fromLetters: $0.reference.column.value) }
+            .max() ?? 0
+
+        var headers = Array(repeating: "", count: maxIndex + 1)
+        for cell in row.cells {
+            if let idx = columnIndex(fromLetters: cell.reference.column.value) {
+                headers[idx] = cell.stringValue(sharedStrings)
+                    ?? cell.inlineString?.text
+                    ?? cell.value
+                    ?? ""
+            }
+        }
+        return headers
+    }
+ }
+    
+    /// Computes a detailed difference between this inventory list and another, classifying items as added, removed, modified, or unchanged.
+    ///
+    /// This method compares two Inventurliste instances by building unique, occurrence-aware keys for each Bestandsobjekt
+    /// (using `buildDictionary(from:)`). It then:
+    /// - Marks items present only in the new list as `added`.
+    /// - Marks items present only in the old list as `removed`.
+    /// - Marks items present in both lists with identical content as `unchanged`.
+    /// - Marks items present in both lists with differing content as `modified` (returned as pairs of old and new values).
+    ///
+    /// Handling of duplicates:
+    /// - Keys are generated from each item's `Bestandsobjekt.key`.
+    /// - Duplicate base keys are disambiguated by appending a " #n" suffix to subsequent occurrences (e.g., "ABC", "ABC #2").
+    /// - This ensures all duplicates are preserved and compared positionally by their unique occurrence keys.
+    ///
+    /// Equality semantics:
+    /// - Items are considered equal (and thus `unchanged`) if `Bestandsobjekt` conforms to `Equatable` and `==` returns true.
+    /// - Otherwise, they are classified as `modified`.
+    ///
+    /// - Parameter other: The other Inventurliste to compare against (treated as the "new" list).
+    /// - Returns: An `XLSXDiff` containing arrays of `added`, `removed`, `modified` (as `(alt:new:)` tuples), and `unchanged` items.
+    /// - Note: The order within each result array reflects dictionary iteration order of the keyed collections and is not guaranteed to be stable.
+ 
+    
+    /// Builds a dictionary of Bestandsobjekt items keyed by a unique string while tracking duplicate base keys.
+    ///
+    /// This helper is used to prepare inventory items for comparison (e.g., diffing) by:
+    /// - Creating a stable, unique key for every occurrence of an item based on its `Bestandsobjekt.key`.
+    /// - Preserving all duplicates instead of overwriting them by appending an occurrence suffix " #n"
+    ///   to the key starting with the second appearance (e.g., "ABC", "ABC #2", "ABC #3").
+    /// - Recording which base keys appeared more than once.
+    ///
+    /// Behavior:
+    /// - The first occurrence of a given `item.key` is stored under the plain key (e.g., "ABC").
+    /// - Each subsequent occurrence of the same base key is stored under a suffixed key (e.g., "ABC #2").
+    /// - The returned `duplicates` set contains the base keys that had 2 or more occurrences.
+    ///
+    /// - Parameter items: The list of Bestandsobjekt entries to index.
+    /// - Returns: A tuple containing:
+    ///   - dict: A dictionary mapping unique keys to their corresponding Bestandsobjekt.
+    ///   - duplicates: A set of base keys that occurred more than once in the input.
+extension Inventurliste {
+    func diff(against other: Inventurliste) -> XLSXDiff {
+        let parentsOld = Self.computeParents(for: self.inventurliste)
+        let parentsNew = Self.computeParents(for: other.inventurliste)
+
+        // Pfadsegment für ein einzelnes Element (mit Ebenen-Präfix) – wertet leere Ebenen als "0"
+        func segment(for item: Bestandsobjekt) -> String {
+            let ebene = item.Ebene.isEmpty ? "0" : (Int(item.Ebene) != nil ? item.Ebene : "0")
+            return "[\(ebene)] \(item.key)"
+        }
+
+        func generierePfadListe(aus elementen: [Bestandsobjekt], parents: [String: Bestandsobjekt]) -> [PfadElement] {
+            let pfade = Self.vollePfade(fuer: elementen, parents: parents, segment: segment)
+            return elementen.map { item in
+                PfadElement(vollstaendigerPfad: pfade[item.key] ?? segment(for: item), objekt: item)
+            }
+        }
+
+        let altePfade = generierePfadListe(aus: self.inventurliste, parents: parentsOld)
+        let neuePfade = generierePfadListe(aus: other.inventurliste, parents: parentsNew)
+
+        func groupByFullPath(_ elements: [PfadElement]) -> [String: [Bestandsobjekt]] {
+            var dict: [String: [Bestandsobjekt]] = [:]
+            for el in elements {
+                dict[el.vollstaendigerPfad, default: []].append(el.objekt)
+            }
+            for key in dict.keys {
+                dict[key]?.sort { $0.Zeile < $1.Zeile }
+            }
+            return dict
+        }
+
+        let oldGroups = groupByFullPath(altePfade)
+        let newGroups = groupByFullPath(neuePfade)
+
+        var added: [Bestandsobjekt] = []
+        var removed: [Bestandsobjekt] = []
+        var modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)] = []
+        var unchanged: [Bestandsobjekt] = []
+
+        var oldDuplicates = Set<String>()
+        var newDuplicates = Set<String>()
+
+        let allPaths = Set(oldGroups.keys).union(newGroups.keys)
+
+        for pfad in allPaths {
+            let olds = oldGroups[pfad] ?? []
+            let news = newGroups[pfad] ?? []
+
+            var matchedNewIndices = Set<Int>()
+            var matchedOldIndices = Set<Int>()
+
+            for (oldIdx, oldItem) in olds.enumerated() {
+                for (newIdx, newItem) in news.enumerated() {
+                    if !matchedNewIndices.contains(newIdx) && oldItem == newItem {
+                        unchanged.append(newItem)
+                        matchedOldIndices.insert(oldIdx)
+                        matchedNewIndices.insert(newIdx)
+                        break
+                    }
+                }
+            }
+
+            let remainingOlds = olds.enumerated().filter { !matchedOldIndices.contains($0.offset) }.map { $0.element }
+            let remainingNews = news.enumerated().filter { !matchedNewIndices.contains($0.offset) }.map { $0.element }
+
+            let pairCount = min(remainingOlds.count, remainingNews.count)
+
+            for i in 0..<pairCount {
+                modified.append((alt: remainingOlds[i], new: remainingNews[i]))
+            }
+
+            if remainingOlds.count > pairCount {
+                removed.append(contentsOf: remainingOlds[pairCount...])
+            }
+            if remainingNews.count > pairCount {
+                added.append(contentsOf: remainingNews[pairCount...])
+            }
+
+            if remainingOlds.count > 1 { oldDuplicates.insert(pfad) }
+            if remainingNews.count > 1 { newDuplicates.insert(pfad) }
+        }
+
+        return XLSXDiff(
+            added: added,
+            removed: removed,
+            modified: modified,
+            unchanged: unchanged,
+            duplicateKeysOld: oldDuplicates,
+            duplicateKeysNew: newDuplicates
+        )
+    }
+}
+
+
+
+extension Inventurliste {
+    /// Ermittelt für jedes Objekt in einer geordneten Liste (Original-Reihenfolge aus der Excel-Datei!)
+    /// das nächstgelegene VORHERIGE Objekt mit niedrigerer Ebene – dessen direktes "Elternteil".
+    static func computeParents(for items: [Bestandsobjekt]) -> [String: Bestandsobjekt] {
+        var result: [String: Bestandsobjekt] = [:]
+        var stack: [(level: Int, obj: Bestandsobjekt)] = []
+
+        for item in items {
+            let level = Int(item.Ebene) ?? 0
+            while let last = stack.last, last.level >= level {
+                stack.removeLast()
+            }
+            if let parent = stack.last {
+                result[item.key] = parent.obj
+            }
+            stack.append((level, item))
+        }
+        return result
+    }
+
+    /// Berechnet für eine in Original-Zeilenreihenfolge vorliegende Liste die vollständigen Pfade
+    /// (Wurzel → Element) in O(n), statt für jedes Element einzeln bis zur Wurzel hochzulaufen.
+    /// `segment` bestimmt das Pfadsegment pro Element (Default: einfach der Key).
+    /// Voraussetzung: Elternteile stehen in `items` vor ihren Kindern (Original-Zeilenreihenfolge).
+    static func vollePfade(
+        fuer items: [Bestandsobjekt],
+        parents: [String: Bestandsobjekt],
+        segment: (Bestandsobjekt) -> String = { $0.key }
+    ) -> [String: String] {
+        var cache: [String: String] = [:]
+        cache.reserveCapacity(items.count)
+        for item in items {
+            let eigenesSegment = segment(item)
+            if let parent = parents[item.key], let parentPath = cache[parent.key] {
+                cache[item.key] = parentPath + "/" + eigenesSegment
+            } else {
+                cache[item.key] = eigenesSegment
+            }
+        }
+        return cache
+    }
+}
+//
+//  PfadElement.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 04.08.2026.
+//
+
+import Foundation
+
+// Hilfsstruktur für den präzisen Pfad-Abgleich
+struct PfadElement {
+    let vollstaendigerPfad: String
+    let objekt: Bestandsobjekt
+}
+//
+//  Abgleich_Inventurlisten_THWApp.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 07.07.2026.
+//
+
+import SwiftUI
+
+@main
+struct THW_Inventur_Vergleichs_Assistent: App {
+    
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true // 'true' sorgt dafür, dass die App komplett schließt
+    }
+}
+//
+//  XLSX.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 12.07.2026.
+//
+
+/**
+ 
+ */
+
+import UniformTypeIdentifiers
+
+extension UTType {
+    static var xlsx: UTType {
+        UTType(filenameExtension: "xlsx") ?? UTType(exportedAs: "org.openxmlformats.spreadsheetml.sheet")
+    }
+}
+//
+//  Untitled.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 12.07.2026.
+//
+
+/// A value type that represents the differences between two collections of `Bestandsobjekt`
+/// parsed from XLSX sources (e.g., two inventory lists).
+///
+/// Use `XLSXDiff` to categorize how items changed between an "old" and a "new" dataset:
+/// - `added`: Items present in the new dataset but not in the old.
+/// - `removed`: Items present in the old dataset but not in the new.
+/// - `modified`: Items present in both datasets that differ in at least one relevant field.
+///   Each tuple provides the previous (`alt`) and the updated (`new`) state of the item.
+/// - `unchanged`: Items present in both datasets that are identical according to the chosen
+///   equality/comparison criteria.
+///
+/// The `hasChanges` computed property is a convenience flag indicating whether any additions,
+/// removals, or modifications exist (it ignores `unchanged`).
+///
+/// Typical usage:
+/// - Generate an `XLSXDiff` after comparing two lists.
+/// - Present the results in a UI, export a change report, or drive follow-up actions
+///   (e.g., create tasks for added or removed inventory).
+///
+/// - Important: The semantics of "modified" and "unchanged" depend on how `Bestandsobjekt`
+///   equality or comparison is defined elsewhere in the project. Ensure that the same criteria
+///   are used when constructing the diff.
+///
+/// - Note: The term `alt` (German for "old") is used for the previous state, and `new` for the
+///   updated state within the `modified` tuples.
+///
+/// - SeeAlso: `Bestandsobjekt`
+struct XLSXDiff {
+    let added: [Bestandsobjekt]
+    let removed: [Bestandsobjekt]
+    let modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)]
+    let unchanged: [Bestandsobjekt]
+    
+    let duplicateKeysOld: Set<String>
+    let duplicateKeysNew: Set<String>
+    
+    var hasChanges: Bool {
+        !added.isEmpty || !removed.isEmpty || !modified.isEmpty
+    }
+    
+    var hasDuplicateWarnings: Bool {
+            !duplicateKeysOld.isEmpty || !duplicateKeysNew.isEmpty
+        }
+}
+
+
+
+//
+//  BestandsobjektView.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 12.07.2026.
+//
+
+import SwiftUI
+
+/// A SwiftUI view that presents a single inventory item (Bestandsobjekt) in a compact, readable row layout.
+///
+/// The row displays:
+/// - A headline with the item's description (or a placeholder if missing),
+/// - A capsule-styled status badge aligned to the trailing edge,
+/// - The item's "Sachnummer" as a secondary subheadline,
+/// - A two-column grid of labeled detail fields including:
+///   - Ebene
+///   - Art
+///   - STAN soll
+///   - Menge Ist
+///   - THWin Bestand
+///   - Bestand Fahrzeug
+///   - Inventarnummer
+///   - Gerätenummer
+///
+/// Empty string values in detail fields are rendered as an en dash (–) to indicate absence of data.
+///
+/// Layout and styling notes:
+/// - Primary information (description) uses `.headline`.
+/// - Status uses `.caption` within a light gray capsule background.
+/// - "Sachnummer" uses `.subheadline` with secondary foreground style.
+/// - Detail fields use `.caption` (values) and `.caption2` (labels) with secondary style for labels.
+/// - The detail grid uses two flexible columns to adapt to available width.
+///
+/// Dependencies:
+/// - Expects a `Bestandsobjekt` model with the following `String` properties:
+///   `Beschreibung`, `Status`, `Sachnummer`, `Ebene`, `Art`, `STAN_soll`,
+///   `Menge_ist`, `THWin_Bestand`, `Fahrzeug_Bestand`, `Inventarnummer`, `Geraetenummer`.
+///
+/// Accessibility:
+/// - Uses textual labels and values suitable for VoiceOver.
+/// - Consider adding accessibility identifiers if used in UI tests.
+///
+/// Example usage:
+/// ```swift
+/// BestandsobjektRow(objekt: bestandsobjekt)
+/// ```
+///
+/// - SeeAlso: `Bestandsobjekt`
+struct BestandsobjektRow: View {
+    let objekt: Bestandsobjekt
+    var hideDescription: Bool = false // NEU: Standardmäßig sichtbar
+ 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !hideDescription {
+                HStack {
+                    Text(objekt.Beschreibung.isEmpty ? "(ohne Beschreibung)" : objekt.Beschreibung)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                }
+            }
+ 
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                GridRow(alignment: .top) {
+                    labeledField("Ebene", objekt.Ebene)
+                    labeledField("Ortseinheit", objekt.Ortseinheit)
+                    labeledField("Art", objekt.Art)
+                    labeledField("Fremdbeschafft", objekt.Fremdbeschaft)
+                    labeledField("STAN soll", objekt.Menge_STAN)
+                    labeledField("Menge Ist", objekt.Menge_ist)
+                    labeledField("THWin Bestand", objekt.Verfuegbar)
+                    labeledField("Ausstattung | Hersteller | Typ", objekt.Beschreibung)
+                    labeledField("Sachnummer", objekt.Sachnummer)
+                    labeledField("Inventarnummer", objekt.Inventarnummer)
+                    labeledField("Gerätenummer", objekt.Geraetenummer)
+                    labeledField("Status", objekt.Status)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+ 
+    @ViewBuilder
+    private func labeledField(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .center, spacing: 8) {
+            Text("\(label):")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(value.isEmpty ? "–" : value)
+                .font(.headline)
+                .fontWeight(.medium)
+        }
+    }
+}
+//
+//  ContentView.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 07.07.2026.
+//
+
+import SwiftUI
+import UniformTypeIdentifiers
+
+
+/// A SwiftUI view that drives the UI for comparing two XLSX inventory lists.
+///
+/// ContentView presents two file selection actions (“Alte Datei wählen” and “Neue Datei wählen”)
+/// to import .xlsx files using the system file importer. Once both files are loaded, it delegates
+/// to `DiffView` to visualize the computed differences provided by `XLSXViewModel`.
+///
+/// Responsibilities:
+/// - Manages UI state for selecting and loading two documents (“old” and “new”) via `.fileImporter`.
+/// - Coordinates with `XLSXViewModel` to store loaded documents, compute diffs, and surface errors.
+/// - Presents a confirmation alert if the user attempts to replace an already loaded document.
+/// - Provides a toolbar action to reset the current state (clears loaded documents and diff).
+///
+/// Key properties:
+/// - `viewModel`: The `XLSXViewModel` instance holding loaded documents, errors, and the diff.
+/// - `activeSlot`: The document slot currently targeted by the file importer (old/new).
+/// - `lastRequestedSlot`: Remembers which slot the user last requested, used to resolve importer callbacks.
+/// - `showOverwriteConfirmation`: Controls presentation of the overwrite confirmation alert.
+/// - `pendingSlot`: Temporarily stores the slot that the user intends to overwrite, confirmed via alert.
+///
+/// User flow:
+/// 1. The user taps “Alte Datei wählen” or “Neue Datei wählen”.
+/// 2. If a file is already loaded for that slot, a confirmation alert is shown before proceeding.
+/// 3. On confirmation (or if the slot was empty), the system file importer is presented for `.xlsx`.
+/// 4. On successful selection, the file’s data is read with security-scoped access and passed to the view model.
+/// 5. Errors are displayed inline; when both files are loaded and a diff exists, `DiffView` is shown.
+///
+/// Platform considerations:
+/// - Uses `UniformTypeIdentifiers` to restrict the importer to `.xlsx`.
+/// - Uses security-scoped resource access to read files from sandboxed locations.
+/// - Designed for Apple platform SwiftUI apps with a `NavigationStack` and toolbar.
+///
+/// Note:
+/// - This view assumes the presence of `XLSXViewModel`, its `DocumentSlot` type, and `DiffView`.
+/// - Prefer keeping file I/O on background queues if large files are expected; consider adapting
+///   `loadFile` to use Swift concurrency for smoother UI responsiveness.
+struct ContentView: View {
+    @State private var viewModel = XLSXViewModel()
+    @State private var activeSlot: XLSXViewModel.DocumentSlot?
+    @State private var lastRequestedSlot: XLSXViewModel.DocumentSlot?
+ 
+    // Bestätigungs-Popup beim Überschreiben eines bereits geladenen Slots
+    @State private var showResetConfirmation = false
+    @State private var showOverwriteConfirmation = false
+    @State private var pendingSlot: XLSXViewModel.DocumentSlot?
+ 
+    private var isImporterPresented: Binding<Bool> {
+        Binding(
+            get: { activeSlot != nil },
+            set: { isPresented in
+                if !isPresented { activeSlot = nil }
+            }
+        )
+    }
+ 
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 30) {
+                HStack {
+                    Spacer()
+                    VStack {
+                        Button("") {
+                            requestFile(for: .old)
+                        }
+                        .buttonStyle(
+                            .fileImporter(
+                                title: "Alte Inventur wählen",
+                                subtitle: ".xlsx",
+                                systemImage: "arrow.up.doc.fill",
+                                isSelected: viewModel.oldDocument != nil
+                            )
+                        )
+                    }
+                    Spacer()
+
+                    VStack {
+                        Button("") {
+                            requestFile(for: .new)
+                        }
+                        .buttonStyle(
+                            .fileImporter(
+                                title: "Neue Inventur wählen",
+                                subtitle: ".xlsx",
+                                systemImage: "arrow.up.doc.fill",
+                                isSelected: viewModel.newDocument != nil
+                            )
+                        )
+                      
+                    }
+                    Spacer()
+                }
+                
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+ 
+                if let diff = viewModel.diff {
+                    DiffView(
+                        diff: diff,
+                        oldItems: viewModel.oldDocument?.inventurliste ?? [],
+                        newItems: viewModel.newDocument?.inventurliste ?? [],
+                        viewModel: viewModel
+                    )
+                    } else {
+                    Spacer()
+                    Text("Bitte beide Dateien auswählen")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+            .padding()
+            .navigationTitle("THW-Inventur Vergleichs Assistent")
+                .navigationDestination(isPresented: Binding(
+                    get: { viewModel.diff != nil },
+                    set: { if !$0 { viewModel.reset() } }
+                )) {
+                    if let diff = viewModel.diff {
+                        DiffView(
+                            diff: diff,
+                            oldItems: viewModel.oldDocument?.inventurliste ?? [],
+                            newItems: viewModel.newDocument?.inventurliste ?? [],
+                            viewModel: viewModel
+                        )
+                        .navigationTitle("Vergleichsergebnis")
+                    }
+                }
+                
+        }
+        .fileImporter(isPresented: isImporterPresented, allowedContentTypes: [.xlsx]) { result in
+            guard let slot = activeSlot ?? lastRequestedSlot else { return }
+            handle(result, as: slot)
+        }
+        .alert("Datei bereits geladen", isPresented: $showOverwriteConfirmation) {
+            Button("Abbrechen", role: .cancel) {
+                pendingSlot = nil
+            }
+            Button("Überschreiben", role: .destructive) {
+                if let slot = pendingSlot {
+                    lastRequestedSlot = slot
+                    activeSlot = slot
+                }
+                pendingSlot = nil
+            }
+        } message: {
+            Text("Für diesen Slot ist bereits eine Datei geladen. Möchtest du sie durch eine neue ersetzen?")
+        }
+    }
+ 
+    /// Prüft, ob für den Slot schon eine Datei existiert, und fragt ggf. vorher per Popup nach
+    private func requestFile(for slot: XLSXViewModel.DocumentSlot) {
+        let alreadyLoaded: Bool = {
+            switch slot {
+            case .old: return viewModel.oldDocument != nil
+            case .new: return viewModel.newDocument != nil
+            }
+        }()
+ 
+        if alreadyLoaded {
+            pendingSlot = slot
+            showOverwriteConfirmation = true
+        } else {
+            lastRequestedSlot = slot
+            activeSlot = slot
+        }
+    }
+ 
+    private func handle(_ result: Result<URL, Error>, as slot: XLSXViewModel.DocumentSlot) {
+        switch result {
+        case .success(let url):
+            loadFile(at: url, as: slot)
+        case .failure(let error):
+            viewModel.errorMessage = error.localizedDescription
+        }
+    }
+ 
+    private func loadFile(at url: URL, as slot: XLSXViewModel.DocumentSlot) {
+        guard url.startAccessingSecurityScopedResource() else {
+            viewModel.errorMessage = "Kein Zugriff auf die Datei"
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+ 
+        do {
+            let data = try Data(contentsOf: url)
+            viewModel.load(data: data, as: slot)
+        } catch {
+            viewModel.errorMessage = "Fehler beim Lesen: \(error.localizedDescription)"
+        }
+    }
+}
+
+#Preview {
+    ContentView()
+}
+//
+//  DiffView.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 12.07.2026.
+//
+
+import SwiftUI
+
+// Marker für die Positionen im ScrollView-Koordinatensystem
+struct NodePositionData: Equatable {
+    let id: String
+    let minY: CGFloat
+}
+
+struct NodePositionPreferenceKey: PreferenceKey {
+    static var defaultValue: [NodePositionData] = []
+    
+    static func reduce(value: inout [NodePositionData], nextValue: () -> [NodePositionData]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+struct DiffView: View {
+    let diff: XLSXDiff
+    let oldItems: [Bestandsobjekt]
+    let newItems: [Bestandsobjekt]
+    
+    @Bindable var viewModel: XLSXViewModel
+    
+    @State private var showDuplicateDetails = false
+    
+    @State private var hideDescriptions = false
+    @State private var showFilters = false
+    
+    @Environment(\.dismiss) var dismiss
+    @State private var showingBackAlert = false
+    
+    @State private var displayedRoots: [HierarchyNode] = []
+    @State private var expanded: Set<String> = []
+    
+    // Breadcrumb-Pfad
+    @State private var breadcrumbParts: [String] = []
+    @State private var nodePositions: [String: CGFloat] = [:]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header Controls mit Such- und Filterleiste
+            
+            ShowOptionsSection
+            
+            
+            if diff.hasDuplicateWarnings {
+                duplicateWarningBanner
+            }
+            
+            if !diff.hasChanges && !viewModel.selectedStatuses.contains(.unchanged) {
+                Spacer()
+                Text("Keine Unterschiede gefunden")
+                    .foregroundStyle(.secondary)
+                Spacer()
+            } else {
+                // Sticky Breadcrumb Bar
+                // Sticky Breadcrumb Bar
+                if !breadcrumbParts.isEmpty {
+                    breadCrumpSection
+                    
+                    Divider()
+                }
+                
+                // Eigentliche ScrollView
+                ScrollView([.horizontal, .vertical]) {
+                    ScrollSection
+                }
+                .coordinateSpace(name: "scrollSpace")
+                .onAppear {
+                    rebuildTree()
+                    expanded = viewModel.defaultExpandedPruned
+                }
+                
+                .onChange(of: viewModel.searchText) {
+                    viewModel.scheduleRecomputeVisibleKeysDetached()
+                }
+                .onChange(of: viewModel.selectedStatuses) {
+                    withTransaction(Transaction(animation: nil)) {
+                        rebuildTree()
+                    }}
+                .onChange(of: viewModel.selectedFilterRegeln) {
+                    withTransaction(Transaction(animation: nil)) {
+                        viewModel.scheduleRecomputeVisibleKeysDetached()
+                    }}
+                
+            }
+        }
+        .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
+        .navigationBarBackButtonHidden(true) // Standard-Zurück-Button ausblenden
+        .alert("Vergleich verlassen?", isPresented: $showingBackAlert) {
+                    Button("Abbrechen", role: .cancel) { }
+                    Button("Verlassen", role: .destructive) {
+                        viewModel.reset() // Hier erst Daten löschen
+                        dismiss()         // Zurückgehen
+                    }
+                } message: {
+                    Text("Wenn du jetzt zurückgehst, gehen die Vergleichsdaten verloren.")
+                }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    // Alert anzeigen statt direkt zu, gehen
+                    showingBackAlert = true
+                } label: {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Zurück")
+                    }
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showFilters.toggle()
+                    }
+                } label: {
+                    Label("Filter", systemImage: showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .help("Filter & Optionen ein-/ausklappen")
+            }
+        }
+    }
+    
+    private var ScrollSection: some View {
+        LazyVStack(alignment: .leading, spacing: 12) {
+            ForEach(displayedRoots) { root in
+                if viewModel.visibleKeys.contains(root.id) {
+                    TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
+                        hierarchyRow(for: node)
+                    }
+                    
+                    Divider()
+                        .padding(.vertical, 4)
+                        .opacity(0.3)
+                }
+            }
+            .padding(.leading, 10)
+            
+        }
+        .background(Color(.controlBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .overlay(RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        .padding(.vertical, 12)
+
+    }
+    
+ 
+    private var breadCrumpSection: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(breadcrumbParts.enumerated()), id: \.offset) { index, part in
+                if index > 0 {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                
+                Text(part)
+                    .font(.caption.weight(index == breadcrumbParts.count - 1 ? .bold : .regular))
+                    .foregroundStyle(index == breadcrumbParts.count - 1 ? .primary : .secondary)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal)
+        .background(Color(.controlBackgroundColor).opacity(0.5))
+        
+    }
+    
+    private var ShowOptionsSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Toggle("Überschriften ausblenden", isOn: $hideDescriptions)
+                    .toggleStyle(.switch)
+                Spacer()
+                Button("▼ Alle", action: expandAll)
+                    .font(.caption2)
+                    .padding(.horizontal, 4)
+                Button("▲ Keine", action: collapseAll)
+                    .font(.caption2)
+                    .padding(.horizontal, 4)
+            }
+            
+            if showFilters {
+                // Filter & Such-Steuerung
+                filterSechtion
+            }
+            
+        }
+        .padding(12)
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .padding(.top, 6)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        
+    }
+    
+    private var filterSechtion: some View {
+        VStack(spacing: 12){
+            Divider()
+            HStack(spacing: 8) {
+                ForEach(FilterStatus.allCases) { status in
+                    Toggle(status.rawValue, isOn: Binding(
+                        get: { viewModel.selectedStatuses.contains(status) },
+                        set: { isSelected in
+                            if isSelected {
+                                viewModel.selectedStatuses.insert(status)
+                            } else {
+                                viewModel.selectedStatuses.remove(status)
+                            }
+                            viewModel.scheduleRecomputeVisibleKeysDetached()
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                }
+                
+            }
+            Divider()
+            HStack(spacing: 8) {
+                Text("Filter: ")
+                ForEach(FilterRegeln.allCases) { status in
+                    Toggle(status.rawValue, isOn: Binding(
+                        get: { viewModel.selectedFilterRegeln.contains(status) },
+                        set: { isSelected in
+                            if isSelected {
+                                viewModel.selectedFilterRegeln.insert(status)
+                            } else {
+                                viewModel.selectedFilterRegeln.remove(status)
+                            }
+                            viewModel.scheduleRecomputeVisibleKeysDetached()
+                        }
+                    ))
+                    .toggleStyle(.button)
+                }
+                
+            }
+        }
+    }
+    
+    private func rebuildTree() {
+        // Prüfen, ob der User "Unverändert" im Filter-Set hat
+        if viewModel.selectedStatuses.contains(.unchanged) {
+            displayedRoots = viewModel.fullHierarchyRoots
+        } else {
+            // Performance-Booster: Schlanken Baum ohne unveränderte Zweige nutzen
+            displayedRoots = viewModel.prunedHierarchyRoots
+        }
+        breadcrumbParts = []
+    }
+    private func expandAll() {
+        var allIds: Set<String> = []
+        func collect(_ node: HierarchyNode) {
+            allIds.insert(node.id)
+            for child in node.children { collect(child) }
+        }
+        for root in displayedRoots { collect(root) }
+        expanded = allIds
+    }
+    
+    private func collapseAll() {
+        expanded.removeAll()
+    }
+    
+    private func computeInitialExpanded(for roots: [HierarchyNode]) -> Set<String> {
+        var toExpand: Set<String> = []
+        
+        if viewModel.selectedStatuses.contains(.unchanged) {
+                // Wir klappen einfach nur die Haupt-Kategorien (Ebene 0) auf.
+                // Das geht in 1 Millisekunde statt in 2 Sekunden.
+                for root in roots {
+                    toExpand.insert(root.id)
+                }
+                return toExpand
+            }
+        
+        func traverse(_ node: HierarchyNode) -> Bool {
+            var hasChange = false
+            switch node.status {
+            case .added, .removed, .modified:
+                hasChange = true
+            case .unchanged:
+                hasChange = false
+            }
+            for child in node.children {
+                let childHas = traverse(child)
+                if childHas { hasChange = true }
+            }
+            if hasChange {
+                toExpand.insert(node.id)
+            }
+            return hasChange
+        }
+        
+        func markAncestors(_ node: HierarchyNode, ancestors: [HierarchyNode]) {
+            var thisHasChange = false
+            switch node.status {
+            case .added, .removed, .modified:
+                thisHasChange = true
+            case .unchanged:
+                break
+            }
+            for child in node.children {
+                markAncestors(child, ancestors: ancestors + [node])
+                if toExpand.contains(child.id) { thisHasChange = true }
+            }
+            if thisHasChange {
+                for a in ancestors { toExpand.insert(a.id) }
+                toExpand.insert(node.id)
+            }
+        }
+        
+        for r in roots { _ = traverse(r) }
+        for r in roots { markAncestors(r, ancestors: []) }
+        return toExpand
+    }
+    
+    // MARK: - Row Rendering
+    
+    @ViewBuilder
+    private func hierarchyRow(for node: HierarchyNode) -> some View {
+        
+        Group {
+            switch node.status {
+            case .added:
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                
+            case .removed:
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                    .opacity(0.8)
+                
+            case .modified(let old):
+                ModifiedBestandsobjektRow(old: old, new: node.objekt, hideDescription: hideDescriptions)
+                
+            case .unchanged:
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                    .opacity(viewModel.selectedStatuses.contains(.unchanged) ? 1.0 : 0.55)
+            }
+        }
+        .background(node.children.isEmpty ? rowColor(for: node) : Color.clear)
+        .cornerRadius(6)
+        .padding(.vertical, 2)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.frame(in: .named("scrollSpace")).minY
+        } action: { newMinY in
+            nodePositions[node.id] = newMinY
+            updateBreadcrumbFromTracker()
+        }
+        .onDisappear {
+            nodePositions.removeValue(forKey: node.id)
+        }
+    }
+    
+   
+
+
+    // MARK: - Position & Breadcrumb Calculation
+    
+    
+    private func updateBreadcrumbFromTracker() {
+        guard !nodePositions.isEmpty else { return }
+
+        let passed = nodePositions.filter { $0.value <= 20 }
+        let topID = passed.max(by: { $0.value < $1.value })?.key
+            ?? nodePositions.min(by: { $0.value < $1.value })?.key
+
+        guard let topID else { return }
+        computeBreadcrumb(for: topID)
+    }
+    
+    private func computeBreadcrumb(for id: String) {
+        guard let path = pathToNode(id: id, in: displayedRoots) else {
+            return
+        }
+        
+        let parts = path.map { node -> String in
+            let beschr = node.objekt.Beschreibung.trimmingCharacters(in: .whitespacesAndNewlines)
+            return beschr.isEmpty ? node.objekt.key : beschr
+        }
+        
+        if breadcrumbParts != parts {
+            breadcrumbParts = parts
+        }
+    }
+    
+    private func pathToNode(id: String, in roots: [HierarchyNode]) -> [HierarchyNode]? {
+        for root in roots {
+            if let path = pathRecursive(current: root, targetID: id) {
+                return path
+            }
+        }
+        return nil
+    }
+    
+    private func pathRecursive(current: HierarchyNode, targetID: String) -> [HierarchyNode]? {
+        if current.id == targetID {
+            return [current]
+        }
+        for child in current.children {
+            if let subpath = pathRecursive(current: child, targetID: targetID) {
+                var p = [current]
+                p.append(contentsOf: subpath)
+                return p
+            }
+        }
+        return nil
+    }
+    
+    // MARK: - Subviews
+    
+    private var duplicateWarningBanner: some View {
+        let totalCount = diff.duplicateKeysOld.count + diff.duplicateKeysNew.count
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            Button {
+                showDuplicateDetails.toggle()
+            } label: {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("\(totalCount) Schlüssel nicht eindeutig – Zuordnung kann unsicher sein")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    Image(systemName: showDuplicateDetails ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            
+            if showDuplicateDetails {
+                VStack(alignment: .leading, spacing: 2) {
+                    if !diff.duplicateKeysOld.isEmpty {
+                        Text("In alter Datei:").font(.caption2).foregroundStyle(.secondary)
+                        ForEach(Array(diff.duplicateKeysOld).sorted(), id: \.self) { key in
+                            Text("• \(key)").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    if !diff.duplicateKeysNew.isEmpty {
+                        Text("In neuer Datei:").font(.caption2).foregroundStyle(.secondary)
+                            .padding(.top, diff.duplicateKeysOld.isEmpty ? 0 : 4)
+                        ForEach(Array(diff.duplicateKeysNew).sorted(), id: \.self) { key in
+                            Text("• \(key)").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.leading, 4)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.08))
+    }
+    
+    
+    private struct PositionTrackingModifier: ViewModifier {
+        let nodeID: String
+        let track: Bool
+        
+        func body(content: Content) -> some View {
+            if track {
+                content.background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: NodePositionPreferenceKey.self,
+                            value: [NodePositionData(id: nodeID, minY: geo.frame(in: .named("scrollSpace")).minY)]
+                        )
+                    }
+                )
+            } else {
+                content
+            }
+        }
+    }
+}
+//
+//  ModifiedBestandsobjektView.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 12.07.2026.
+//
+import SwiftUI
+
+/// A SwiftUI view that displays a comparison of two Bestandsobjekt instances, highlighting modified fields.
+///
+/// ModifiedBestandsobjektRow renders a concise, human-readable diff between an "old"
+/// and a "new" Bestandsobjekt. It emphasizes changed values with color and typography:
+/// - The title (Beschreibung) shows the new value in green and, if changed, the old value
+///   below it with a red strikethrough.
+/// - A badge-like caption on the trailing side indicates the total number of modified fields.
+/// - Below the header, a grid lists key fields. For each changed field, the old value is
+///   shown in red with a strikethrough followed by the new value in green; unchanged fields
+///   are displayed normally.
+///
+/// Behavior and layout details:
+/// - The view computes changes via Bestandsobjekt.fieldChanges(from:to:) and uses the label
+///   string to match fields.
+/// - If the "Beschreibung" field has changed, the header renders the new description prominently
+///   and shows the old description struck through; otherwise, it displays the current description
+///   as a standard headline.
+/// - The Sachnummer is shown as a secondary subheadline below the header.
+/// - The grid presents the following fields (in two columns, flexible width): Ebene, Art,
+///   STAN soll, Menge Ist, THWin Bestand, Bestand Fahrzeug, Inventarnummer, Gerätenummer, Status.
+/// - Empty values are rendered as a dash (–) for clarity.
+///
+/// Styling conventions:
+/// - New/updated values: green, semibold where emphasized.
+/// - Old/replaced values: red with strikethrough.
+/// - Labels: caption2, secondary foreground style.
+/// - Change count: caption2, orange foreground style.
+///
+/// Requirements:
+/// - Bestandsobjekt must provide a static diffing API:
+///   Bestandsobjekt.fieldChanges(from:to:) -> [Bestandsobjekt.FieldChange],
+///   where FieldChange includes at least `label`, `oldValue`, and `newValue`.
+///
+/// Use cases:
+/// - Review and confirm updates before persisting changes.
+/// - Present a summary of modifications in audit or history views.
+/// - Display merge/conflict resolutions by surfacing what would change.
+///
+/// Accessibility:
+/// - Color is used to indicate change; consider complementing with accessibility labels
+///   or traits if used in contexts where color alone is insufficient.
+///
+/// - Parameters:
+///   - old: The original Bestandsobjekt used as the baseline for comparison.
+///   - new: The updated Bestandsobjekt whose values are compared against `old`.
+struct ModifiedBestandsobjektRow: View {
+    let old: Bestandsobjekt
+    let new: Bestandsobjekt
+    var hideDescription: Bool = false // NEU: Standardmäßig sichtbar
+ 
+    private var changes: [Bestandsobjekt.FieldChange] {
+        Bestandsobjekt.fieldChanges(from: old, to: new)
+    }
+ 
+    /// Schnellzugriff: ist ein bestimmtes Feld (per Label) geändert? Falls ja, liefert es den alten Wert.
+    private func change(for label: String) -> Bestandsobjekt.FieldChange? {
+        changes.first { $0.label == label }
+    }
+ 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !hideDescription {
+                if let beschreibungChange = change(for: "Beschreibung") {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(beschreibungChange.newValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.newValue)
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.green)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("\(changes.count) Feld\(changes.count == 1 ? "" : "er") geändert")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                        }
+                        Text(beschreibungChange.oldValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.oldValue)
+                            .font(.subheadline)
+                            .strikethrough(true, color: .red)
+                            .foregroundStyle(.red)
+                            .lineLimit(1)
+                    }
+                } else {
+                    HStack {
+                        Text(new.Beschreibung)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text("\(changes.count) Feld\(changes.count == 1 ? "" : "er") geändert")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+            // Alle Felder wie bei BestandsobjektRow, aber geänderte Felder zeigen Alt/Neu
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                GridRow(alignment: .top) {
+                    fieldCell("Ebene", new.Ebene)
+                    fieldCell("Ortseinheit", new.Ortseinheit)
+                    fieldCell("Art", new.Art)
+                    fieldCell("Fremdbeschafft", new.Fremdbeschaft)
+                    fieldCell("Menge_STAN", new.Menge_STAN)
+                    fieldCell("Menge Ist", new.Menge_ist)
+                    fieldCell("Verfügbar", new.Verfuegbar)
+                    fieldCell("Ausstattung | Hersteller | Typ", new.Beschreibung)
+                    fieldCell("Sachnummer", new.Sachnummer)
+                    fieldCell("Inventarnummer", new.Inventarnummer)
+                    fieldCell("Gerätenummer", new.Geraetenummer)
+                    fieldCell("Status", new.Status)
+                }
+            
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+ 
+    @ViewBuilder
+    private func fieldCell(_ label: String, _ newValue: String) -> some View {
+        if let change = change(for: label) {
+            // Geändertes Feld: alter Wert durchgestrichen/rot, neuer Wert grün darunter
+            VStack(alignment: .center, spacing: 8) {
+                Text("\(label):")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(change.newValue.isEmpty ? "–" : change.newValue)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.green)
+                Text(change.oldValue.isEmpty ? "–" : "\(change.oldValue)")
+                    .font(.headline)
+                    .strikethrough(true, color: .red)
+                    .foregroundStyle(.red)
+            }
+        } else {
+            // Unverändertes Feld: normale Anzeige wie in BestandsobjektRow
+            VStack(alignment: .center, spacing: 8) {
+                Text("\(label):")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Text(newValue.isEmpty ? "–" : newValue)
+                    .font(.headline)
+                    .fontWeight(.medium)
+            }
+        }
+    }
+}
+
+//  TreeDisclosureView.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 04.08.2026.
+//
+import SwiftUI
+
+struct TreeDisclosureView<Content: View>: View {
+    let node: HierarchyNode
+    @Binding var expanded: Set<String>
+    let visibleKeys: Set<String>
+    @ViewBuilder let content: (HierarchyNode) -> Content
+
+    @ViewBuilder
+    var body: some View {
+        
+        if visibleKeys.contains(node.id) {
+            let isExpanded = Binding<Bool>(
+                get: { expanded.contains(node.id) },
+                set: { newValue in
+                    if newValue { expanded.insert(node.id) } else { expanded.remove(node.id) }
+                }
+            )
+            
+            // Filtere Kinder: nur solche anzeigen, deren key in visibleKeys ist
+            let visibleChildren = node.children.filter { visibleKeys.contains($0.id) }
+            
+            if visibleChildren.isEmpty {
+                content(node)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                
+                
+                DisclosureGroup(isExpanded: isExpanded) {
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
+                            .frame(width: 2)                  // Dicke des Strichs (2 pt)
+                            .padding(.leading, 20)             // Perfekt zentriert unter dem 16pt-Pfeil
+                        
+                        
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(visibleChildren) { child in
+                                TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
+                                    .padding(.leading, 8)
+                            }
+                        }
+                        .padding(.leading, 5)
+                    }
+                } label: {
+                    content(node)
+                }
+                .disclosureGroupStyle(ColoredDisclosureGroupStyle(backgroundColor: rowColor(for: node)))
+            }
+        }
+    }
+}
+
+ func rowColor(for node: HierarchyNode) -> Color {
+    switch node.status {
+    case .added: return Color.green.opacity(0.18)
+    case .removed: return Color.red.opacity(0.18)
+    case .modified: return Color.orange.opacity(0.18)
+    case .unchanged: return Color.primary.opacity(0.03)
+    }
+}
+
+
+//
+//  XLSXViewModel.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 12.07.2026.
+//
+import SwiftUI
+import Foundation
+
+enum FilterStatus: String, CaseIterable, Identifiable, Sendable {
+    case added = "Neu"
+    case removed = "Entfernt"
+    case modified = "Geändert"
+    case unchanged = "Unverändert"
+    
+    var id: String { rawValue }
+}
+
+enum FilterRegeln: String, CaseIterable, Identifiable, Sendable {
+    case Fremdbeschafft = "Fremdbeschafft"
+    case ueberSTAN = "Überbestand"
+    case Fehlt = "Fehlt"
+    case ursprünglich = "Veraltet"
+    case verfuegbar = "Verfügbar"
+    case nichtverfuegbar = "nicht Verfügbar"
+    case Ausgetauscht = "Ausgetauscht"
+    case teilweise = "Teilweise"
+    
+    var id: String {rawValue}
+}
+
+/// Sendable Snapshot eines Knotens für Background-Filterung
+private enum StatusSnapshot: Sendable, Equatable {
+    case added
+    case removed
+    case modified
+    case unchanged
+    
+    nonisolated static func == (lhs: StatusSnapshot, rhs: StatusSnapshot) -> Bool {
+        switch (lhs, rhs) {
+        case (.added, .added): return true
+        case (.removed, .removed): return true
+        case (.modified, .modified): return true
+        case (.unchanged, .unchanged): return true
+        default: return false
+        }
+    }
+}
+
+private struct NodeSnapshot: Sendable {
+    let id: String
+    let itemkey: String
+    let beschreibung: String
+    let fremdbeschaft: String
+    let StatusObjekt: String
+    let sachnummer: String
+    let inventarnummer: String
+    let geraetenummer: String
+    let status: StatusSnapshot
+    let oldBeschreibung: String?
+    let oldSachnummer: String?
+    let oldInventarnummer: String?
+    let oldGeraetenummer: String?
+    let children: [NodeSnapshot]
+}
+
+/// Pure Value Funktion: Rekursiv sichtbare Keys aus Snapshots sammeln
+/// @Sendable damit die Funktion in Task.detached nutzbar ist
+private func collectVisibleKeysFromSnapshots(
+    _ nodes: [NodeSnapshot],
+    predicate: @Sendable (NodeSnapshot) -> Bool,
+    into set: inout Set<String>
+) -> Bool {
+    var anyMatch = false
+    for node in nodes {
+        let childrenMatch = collectVisibleKeysFromSnapshots(node.children, predicate: predicate, into: &set)
+        if predicate(node) || childrenMatch {
+            set.insert(node.id)
+            anyMatch = true
+        }
+    }
+    return anyMatch
+}
+
+/// A SwiftUI-observable view model that coordinates loading, parsing, diffing, and filtering of two XLSX-based inventory documents.
+///
+/// XLSXViewModel is responsible for:
+/// - Accepting raw XLSX data for two document "slots" (old and new),
+/// - Parsing that data into `Inventurliste` domain models,
+/// - Computing an `XLSXDiff` between the two documents when both are available,
+/// - Maintaining search/filter state and computing visible keys asynchronously in background,
+/// - Managing expand/collapse state per node (using stable `objekt.key`),
+/// - Exposing any parse or processing errors via a user-presentable message.
+///
+/// Usage:
+/// - Call `load(data:as:)` with XLSX file data and the corresponding `DocumentSlot` (.old or .new).
+/// - Once both slots are loaded successfully, the model automatically recomputes the `diff`.
+/// - Modify `searchText`, `selectedCategory`, or `showOnlyDuplicates` to trigger async recomputation of visible keys.
+/// - Access `diff`, `fullHierarchyRoots`, and `visibleKeys` to populate views.
+/// - Use `isExpanded(_:)`, `toggleExpanded(_:)` to manage node visibility per key.
+/// - Call `reset()` to clear all state and start over.
+
+@Observable
+class XLSXViewModel {
+    // MARK: - Document Loading
+    var oldDocument: Inventurliste?
+    var newDocument: Inventurliste?
+    var diff: XLSXDiff?
+    var errorMessage: String?
+
+    private(set) var fullHierarchyRoots: [HierarchyNode] = []
+    private(set) var prunedHierarchyRoots: [HierarchyNode] = []
+    
+    private(set) var defaultExpandedFull: Set<String> = []
+    private(set) var defaultExpandedPruned: Set<String> = []
+    
+    enum DocumentSlot { case old, new }
+
+    // MARK: - Search & Filter State
+    var searchText: String = ""
+    var selectedStatuses: Set<FilterStatus> = [.added, .removed, .modified]
+    var selectedFilterRegeln: Set<FilterRegeln> = []
+
+    var showOnlyDuplicates: Bool = false
+
+    // MARK: - Visibility & Expansion State
+    private(set) var visibleKeysCache: Set<String> = []
+    var visibleKeys: Set<String> { visibleKeysCache }
+
+    private(set) var expandedKeys: Set<String> = []
+
+    // MARK: - Background Task Management
+    private var visibleKeysTask: Task<Void, Never>?
+
+    // MARK: - Loading
+    func load(data: Data, as slot: DocumentSlot) {
+        errorMessage = nil
+        do {
+            let document = try Inventurliste(data: data)
+            switch slot {
+            case .old: oldDocument = document
+            case .new: newDocument = document
+            }
+            recomputeDiffIfPossible()
+        } catch {
+            errorMessage = "Fehler beim Parsen: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Reset
+    func reset() {
+        oldDocument = nil
+        newDocument = nil
+        diff = nil
+        errorMessage = nil
+        searchText = ""
+        selectedStatuses = [.added, .removed, .modified]
+        selectedFilterRegeln = []
+        showOnlyDuplicates = false
+        visibleKeysCache = []
+        expandedKeys = []
+        fullHierarchyRoots = []
+        visibleKeysTask?.cancel()
+    }
+   
+
+    // MARK: - Visibility Management
+    /// Converts HierarchyNode tree into Sendable snapshots for background processing
+    private func buildSnapshots(from nodes: [HierarchyNode]) -> [NodeSnapshot] {
+        nodes.map { node in
+            
+            let statusSnap: StatusSnapshot
+            var oldB: String?
+            var oldS: String?
+            var oldI: String?
+            var oldG: String?
+            
+            // 1. Status und alte Werte sauber über Pattern Matching extrahieren
+            switch node.status {
+            case .added:
+                statusSnap = .added
+            case .removed:
+                statusSnap = .removed
+            case .modified(let oldObj):
+                // Hier entpacken wir das assoziierte alte Objekt!
+                statusSnap = .modified
+                oldB = oldObj.Beschreibung
+                oldS = oldObj.Sachnummer
+                oldI = oldObj.Inventarnummer
+                oldG = oldObj.Geraetenummer
+            case .unchanged:
+                statusSnap = .unchanged
+            }
+            
+            // 2. Thread-sicheren Snapshot für den Hintergrund-Task erstellen
+            return NodeSnapshot(
+                id: node.id,
+                itemkey: node.objekt.key,
+                beschreibung: node.objekt.Beschreibung,
+                fremdbeschaft: node.objekt.Fremdbeschaft,
+                StatusObjekt: node.objekt.Status,
+                sachnummer: node.objekt.Sachnummer,
+                inventarnummer: node.objekt.Inventarnummer,
+                geraetenummer: node.objekt.Geraetenummer,
+                status: statusSnap,
+                oldBeschreibung: oldB,
+                oldSachnummer: oldS,
+                oldInventarnummer: oldI,
+                oldGeraetenummer: oldG,
+                children: buildSnapshots(from: node.children)
+            )
+        }
+    }
+
+    /// Schedules async, debounced recomputation of visible keys on a background task
+    /// Call this when searchText/selectedCategory/showOnlyDuplicates changed
+    func scheduleRecomputeVisibleKeysDetached(debounceMillis: UInt64 = 250) {
+        // Cancel previous task
+        visibleKeysTask?.cancel()
+
+        // Build snapshot on MainActor (safe access to HierarchyNode objects)
+        let roots = self.fullHierarchyRoots
+        let snapshots = buildSnapshots(from: roots)
+
+        // Capture filter state as Sendable copies
+        let query = self.searchText
+        let activeFilterRegeln = self.selectedFilterRegeln
+        let activeStatuses = self.selectedStatuses
+        let onlyDup = self.showOnlyDuplicates
+       
+
+        // Start detached background task
+        visibleKeysTask = Task.detached { [snapshots, query, activeStatuses] in
+            // Debounce sleep (cancellable)
+            do {
+                try await Task.sleep(nanoseconds: debounceMillis * 1_000_000)
+            } catch {
+                return
+            }
+
+            if Task.isCancelled { return }
+
+            // Build predicate for filtering on snapshots (pure, Sendable)
+            let lowerQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+            if lowerQuery.isEmpty && activeStatuses == [.added,.removed,.modified] && !onlyDup {
+            // Einfach alle vorhandenen Keys übernehmen statt rekursiv zu filtern!
+            var allKeys = Set<String>()
+            func collectAll(from nodes: [NodeSnapshot]) {
+                for n in nodes {
+                    allKeys.insert(n.id)
+                    collectAll(from: n.children)
+                }
+            }
+            collectAll(from: snapshots)
+            
+            if !Task.isCancelled {
+                await MainActor.run { self.visibleKeysCache = allKeys }
+            }
+            return
+        }
+            let predicate: @Sendable (NodeSnapshot) -> Bool = { node in
+                // 1. Suchtext-Prüfung
+                if !lowerQuery.isEmpty {
+                    let matchesSearch = node.beschreibung.lowercased().contains(lowerQuery) ||
+                                        node.sachnummer.lowercased().contains(lowerQuery) ||
+                                        node.inventarnummer.lowercased().contains(lowerQuery) ||
+                                        node.geraetenummer.lowercased().contains(lowerQuery) ||
+                                        (node.oldBeschreibung?.lowercased().contains(lowerQuery) ?? false) ||
+                                        (node.oldSachnummer?.lowercased().contains(lowerQuery) ?? false) ||
+                                        (node.oldInventarnummer?.lowercased().contains(lowerQuery) ?? false) ||
+                                        (node.oldGeraetenummer?.lowercased().contains(lowerQuery) ?? false)
+                    
+                    // Wenn der Suchbegriff in keinem Feld vorkommt -> Element sofort aussortieren!
+                    if !matchesSearch {
+                        return false
+                    }
+                }
+                
+                // 2. Kategorie-Filter
+                let matchesStatus: Bool = {
+                            switch node.status {
+                            case .added: return activeStatuses.contains(.added)
+                            case .removed: return activeStatuses.contains(.removed)
+                            case .modified: return activeStatuses.contains(.modified)
+                            case .unchanged: return activeStatuses.contains(.unchanged)
+                            }
+                        }()
+                        if !matchesStatus { return false }
+
+                let matchFilter: Bool = {
+                    if activeFilterRegeln.isEmpty {return true}
+                    if node.StatusObjekt.contains("F") {return activeFilterRegeln.contains(.Fehlt)}
+                    if node.StatusObjekt.contains("U") {return activeFilterRegeln.contains(.ursprünglich)}
+                    if node.StatusObjekt.contains("ÜB") {return activeFilterRegeln.contains(.ueberSTAN)}
+                    if node.StatusObjekt.contains("NV") {return activeFilterRegeln.contains(.nichtverfuegbar)}
+                    if node.StatusObjekt.contains("V") {return activeFilterRegeln.contains(.verfuegbar)}
+                    if node.StatusObjekt.contains("T") {return activeFilterRegeln.contains(.teilweise)}
+                    if node.StatusObjekt.contains("A") {return activeFilterRegeln.contains(.Ausgetauscht)}
+                    if !node.fremdbeschaft.isEmpty {return activeFilterRegeln.contains(.Fremdbeschafft)}
+                    return false
+                }()
+                if !matchFilter { return false }
+                
+                return true
+            }
+            
+            
+
+            // FIX: Nutze lokale Variable statt inout-Mutation in Task.detached
+            var keys = Set<String>()
+            _ = await collectVisibleKeysFromSnapshots(snapshots, predicate: predicate, into: &keys)
+
+            if Task.isCancelled { return }
+
+            // Write result back on MainActor
+            await MainActor.run {
+                self.visibleKeysCache = keys
+            }
+        }
+    }
+
+    // MARK: - Expansion State Management
+    func isExpanded(_ key: String) -> Bool {
+        expandedKeys.contains(key)
+    }
+
+    func setExpanded(_ key: String, _ expanded: Bool) {
+        if expanded {
+            expandedKeys.insert(key)
+        } else {
+            expandedKeys.remove(key)
+        }
+    }
+
+    func toggleExpanded(_ key: String) {
+        if expandedKeys.contains(key) {
+            expandedKeys.remove(key)
+        } else {
+            expandedKeys.insert(key)
+        }
+    }
+
+    // MARK: - Private Helpers
+
+    private func recomputeDiffIfPossible() {
+            guard let oldDocument, let newDocument else { return }
+
+            let newDiff = oldDocument.diff(against: newDocument)
+            diff = newDiff
+
+            // 1. Vollständigen Baum erstellen
+            fullHierarchyRoots = buildFullHierarchy(
+                newItems: newDocument.inventurliste,
+                oldItems: oldDocument.inventurliste,
+                diff: newDiff
+            )
+
+            // 2. Reduzierten Baum & Aufklapp-Keys in EINEM Durchlauf berechnen
+            let (pruned, prunedExpanded) = pruneToChangesOnly(fullHierarchyRoots)
+            prunedHierarchyRoots = pruned
+            defaultExpandedPruned = prunedExpanded
+
+            // 3. Für den vollen Baum nur die Hauptkategorien (Ebene 0) aufklappen
+            defaultExpandedFull = Set(fullHierarchyRoots.map(\.id))
+
+            scheduleRecomputeVisibleKeysDetached()
+        }
+}
+//
+//  FileImporterButtonStyle.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 13.08.2026.
+//
+
+import SwiftUI
+
+struct FileImporterButtonStyle: ButtonStyle {
+    var title: String = "Datei auswählen"
+    var subtitle: String? = "oder per Drag & Drop hierher ziehen"
+    var systemImage: String = "doc.badge.plus"
+    var isSelected: Bool = false
+    let THW_gelb = Color(red: 1.0, green: 1.0, blue: 0.0, opacity: 1.0)
+    
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 12) {
+            // Icon mit leichtem Hintergrundkreis
+            ZStack {
+                Circle()
+                    .fill(THW_gelb.opacity(0.12))
+                    .frame(width: 56, height: 56)
+                
+                Image(systemName: systemImage)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(THW_gelb)
+            }
+            
+            // Text-Informationen
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(THW_gelb)
+                
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(THW_gelb)
+                }
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(.vertical, 32)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: (NSScreen.main?.visibleFrame.width ?? 800) * (1.0 / 3.0))        // Hintergrund & abgerundete Ecken
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(red: (0.0 / 255.0), green: (56.0 / 255.0), blue: (123.0 / 255.0), opacity: 1.0))
+        )
+        // Gestrichelter Rahmen für den typischen "Drop-Zone" Look
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(
+                    style: isSelected ? StrokeStyle(lineWidth: 2) : StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                        .foregroundColor(isSelected ? .green : (configuration.isPressed ? .accentColor : .accentColor.opacity(0.4)))
+                )
+        .overlay(
+                    Group {
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.green)
+                                .background(Circle().fill(.white).padding(2)) // Weisser Rand für Kontrast
+                                .offset(x: -8, y: 8) // Nach innen versetzt
+                        }
+                    },
+                    alignment: .topTrailing
+                )
+        // Visuelles Feedback beim Drücken (Skalierung + Deckkraft)
+        .opacity(configuration.isPressed ? 0.55 : 1.0)
+        .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// Praktischer Extension-Shortcut für saubereren Code
+extension ButtonStyle where Self == FileImporterButtonStyle {
+    static var fileImporter: FileImporterButtonStyle {
+        FileImporterButtonStyle()
+    }
+    
+    static func fileImporter(
+        title: String,
+        subtitle: String? = nil,
+        systemImage: String = "doc.badge.plus",
+        isSelected: Bool
+    ) -> FileImporterButtonStyle {
+        FileImporterButtonStyle(title: title, subtitle: subtitle, systemImage: systemImage,isSelected: isSelected)
+    }
+}
+//
+//  RowDisclosureStyle.swift
+//  Abgleich Inventurlisten THW
+//
+//  Created by Kai Sebastian Bühner on 13.08.2026.
+//
+import SwiftUI
+
+struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
+    let backgroundColor: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Der Header (Pfeil + Label)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    configuration.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    // Der echte System-Chevron mit nativer Drehung
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.foreground)
+                        .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
+
+                    configuration.label
+                }
+                .padding(.vertical, 4)
+                .padding(.leading, 8)
+                .padding(.trailing, 6)
+                .background(backgroundColor) // Färbt JETZT Pfeil + Label gemeinsam ein!
+                .cornerRadius(6)
+            }
+            .buttonStyle(.plain) // Entfernt den grauen Standard-Button-Hintergrund
+
+            // Der aufgeklappte Inhalt (Kinder)
+            if configuration.isExpanded {
+                configuration.content
+                    .padding(.top, 8)
+            }
+        }
+    }
+}

@@ -33,6 +33,9 @@ struct DiffView: View {
     @State private var hideDescriptions = false
     @State private var showFilters = false
     
+    @Environment(\.dismiss) var dismiss
+    @State private var showingBackAlert = false
+    
     @State private var displayedRoots: [HierarchyNode] = []
     @State private var expanded: Set<String> = []
     
@@ -65,66 +68,82 @@ struct DiffView: View {
                     Divider()
                 }
                 
-                // Eigentliche ScrollView
-                ScrollView {
-                    ScrollSection
-                }
-                .coordinateSpace(name: "scrollSpace")
-                .onAppear {
-                    rebuildTree()
-                    expanded = viewModel.defaultExpandedPruned
-                }
                 
-                .onChange(of: viewModel.searchText) {
-                    viewModel.scheduleRecomputeVisibleKeysDetached()
-                }
-                .onChange(of: viewModel.selectedStatuses) {
-                    withTransaction(Transaction(animation: nil)) {
-                        rebuildTree()
-                    }}
+                    ScrollSection
+                
+                
+                
             }
         }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
-        .toolbar {
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showFilters.toggle()
+        .navigationBarBackButtonHidden(true) // Standard-Zurück-Button ausblenden
+        .alert("Vergleich verlassen?", isPresented: $showingBackAlert) {
+                    Button("Abbrechen", role: .cancel) { }
+                    Button("Verlassen", role: .destructive) {
+                        viewModel.reset() // Hier erst Daten löschen
+                        dismiss()         // Zurückgehen
                     }
-                } label: {
-                    Label("Filter", systemImage: showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                } message: {
+                    Text("Wenn du jetzt zurückgehst, gehen die Vergleichsdaten verloren.")
                 }
-                .help("Filter & Optionen ein-/ausklappen")
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    // Alert anzeigen statt direkt zu, gehen
+                    showingBackAlert = true
+                } label: {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Zurück")
+                    }
+                }
             }
         }
     }
     
     private var ScrollSection: some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
-            ForEach(displayedRoots) { root in
-                if viewModel.visibleKeys.contains(root.id) {
-                    TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
-                        hierarchyRow(for: node)
+        ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(displayedRoots) { root in
+                        if viewModel.visibleKeys.contains(root.id) {
+                            TreeDisclosureView(node: root, expanded: $expanded, visibleKeys: viewModel.visibleKeys) { node in
+                                hierarchyRow(for: node)
+                            }
+
+                            Divider()
+                                .padding(.vertical, 4)
+                                .opacity(0.3)
+                        }
                     }
-                    
-                    Divider()
-                        .padding(.vertical, 4)
-                        .opacity(0.3)
+                    .padding(.leading, 10)
                 }
             }
-            .padding(.leading, 10)
-            
-        }
-        .background(Color(.controlBackgroundColor))
-        
-        .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-        .overlay(RoundedRectangle(cornerRadius: 10)
+            .background(Color(.controlBackgroundColor))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .cornerRadius(10)
+            .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+            .overlay(RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-        .padding(.vertical, 12)
-
-    }
+            )
+            .padding(.vertical, 12)
+         .coordinateSpace(name: "scrollSpace")
+         .onAppear {
+             rebuildTree()
+             expanded = viewModel.defaultExpandedPruned
+         }
+         
+         .onChange(of: viewModel.searchText) {
+             viewModel.scheduleRecomputeVisibleKeysDetached()
+         }
+         .onChange(of: viewModel.selectedStatuses) {
+             withTransaction(Transaction(animation: nil)) {
+                 rebuildTree()
+             }}
+         .onChange(of: viewModel.selectedFilterRegeln) {
+             withTransaction(Transaction(animation: nil)) {
+                 viewModel.scheduleRecomputeVisibleKeysDetached()
+             }}
+     }
     
  
     private var breadCrumpSection: some View {
@@ -144,6 +163,7 @@ struct DiffView: View {
         .padding(.vertical, 8)
         .padding(.horizontal)
         .background(Color(.controlBackgroundColor).opacity(0.5))
+        
     }
     
     private var ShowOptionsSection: some View {
@@ -151,6 +171,16 @@ struct DiffView: View {
             HStack {
                 Toggle("Überschriften ausblenden", isOn: $hideDescriptions)
                     .toggleStyle(.switch)
+                Spacer()
+                Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            showFilters.toggle()
+                        }
+                            } label: {
+                                Label("Filter", systemImage: (showFilters ? "funnel.fill" : "funnel"))
+                            }
+                            .font(.caption2)
+                            .help("Filter & Optionen ein-/ausklappen")
                 Spacer()
                 Button("▼ Alle", action: expandAll)
                     .font(.caption2)
@@ -181,24 +211,40 @@ struct DiffView: View {
     private var filterSechtion: some View {
         VStack(spacing: 12){
             Divider()
-            
-            HStack(spacing: 16) {
-                HStack(spacing: 8) {
-                                    ForEach(FilterStatus.allCases) { status in
-                                        Toggle(status.rawValue, isOn: Binding(
-                                            get: { viewModel.selectedStatuses.contains(status) },
-                                            set: { isSelected in
-                                                if isSelected {
-                                                    viewModel.selectedStatuses.insert(status)
-                                                } else {
-                                                    viewModel.selectedStatuses.remove(status)
-                                                }
-                                                viewModel.scheduleRecomputeVisibleKeysDetached()
-                                            }
-                                        ))
-                                        .toggleStyle(.button)
-                                    }
-                                }
+            HStack(spacing: 8) {
+                ForEach(FilterStatus.allCases) { status in
+                    Toggle(status.rawValue, isOn: Binding(
+                        get: { viewModel.selectedStatuses.contains(status) },
+                        set: { isSelected in
+                            if isSelected {
+                                viewModel.selectedStatuses.insert(status)
+                            } else {
+                                viewModel.selectedStatuses.remove(status)
+                            }
+                            viewModel.scheduleRecomputeVisibleKeysDetached()
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                }
+                
+            }
+            Divider()
+            HStack(spacing: 8) {
+                Text("Filter: ")
+                ForEach(FilterRegeln.allCases) { status in
+                    Toggle(status.rawValue, isOn: Binding(
+                        get: { viewModel.selectedFilterRegeln.contains(status) },
+                        set: { isSelected in
+                            if isSelected {
+                                viewModel.selectedFilterRegeln.insert(status)
+                            } else {
+                                viewModel.selectedFilterRegeln.remove(status)
+                            }
+                            viewModel.scheduleRecomputeVisibleKeysDetached()
+                        }
+                    ))
+                    .toggleStyle(.button)
+                }
                 
             }
         }

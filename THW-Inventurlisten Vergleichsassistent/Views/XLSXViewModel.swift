@@ -8,12 +8,25 @@ import SwiftUI
 import Foundation
 
 enum FilterStatus: String, CaseIterable, Identifiable, Sendable {
-    case added = "Neu"
-    case removed = "Entfernt"
-    case modified = "Geändert"
-    case unchanged = "Unverändert"
+    case added = "Neu:"
+    case removed = "Entfernt:"
+    case modified = "Geändert:"
+    case unchanged = "Unverändert:"
     
     var id: String { rawValue }
+}
+
+enum FilterRegeln: String, CaseIterable, Identifiable, Sendable {
+    case Fremdbeschafft = "Fremdbeschafft"
+    case ueberSTAN = "Überbestand"
+    case Fehlt = "Fehlt"
+    case ursprünglich = "Veraltet"
+    case verfuegbar = "Verfügbar"
+    case nichtverfuegbar = "nicht Verfügbar"
+    case Ausgetauscht = "Ausgetauscht"
+    case teilweise = "Teilweise"
+    
+    var id: String {rawValue}
 }
 
 /// Sendable Snapshot eines Knotens für Background-Filterung
@@ -38,6 +51,8 @@ private struct NodeSnapshot: Sendable {
     let id: String
     let itemkey: String
     let beschreibung: String
+    let fremdbeschaft: String
+    let StatusObjekt: String
     let sachnummer: String
     let inventarnummer: String
     let geraetenummer: String
@@ -104,6 +119,8 @@ class XLSXViewModel {
     // MARK: - Search & Filter State
     var searchText: String = ""
     var selectedStatuses: Set<FilterStatus> = [.added, .removed, .modified]
+    var selectedFilterRegeln: Set<FilterRegeln> = []
+
     var showOnlyDuplicates: Bool = false
 
     // MARK: - Visibility & Expansion State
@@ -138,6 +155,7 @@ class XLSXViewModel {
         errorMessage = nil
         searchText = ""
         selectedStatuses = [.added, .removed, .modified]
+        selectedFilterRegeln = []
         showOnlyDuplicates = false
         visibleKeysCache = []
         expandedKeys = []
@@ -179,6 +197,8 @@ class XLSXViewModel {
                 id: node.id,
                 itemkey: node.objekt.key,
                 beschreibung: node.objekt.Beschreibung,
+                fremdbeschaft: node.objekt.Fremdbeschaft,
+                StatusObjekt: node.objekt.Status,
                 sachnummer: node.objekt.Sachnummer,
                 inventarnummer: node.objekt.Inventarnummer,
                 geraetenummer: node.objekt.Geraetenummer,
@@ -204,13 +224,13 @@ class XLSXViewModel {
 
         // Capture filter state as Sendable copies
         let query = self.searchText
+        let activeFilterRegeln = self.selectedFilterRegeln
         let activeStatuses = self.selectedStatuses
         let onlyDup = self.showOnlyDuplicates
-        let dupOld = self.diff?.duplicateKeysOld ?? []
-        let dupNew = self.diff?.duplicateKeysNew ?? []
+       
 
         // Start detached background task
-        visibleKeysTask = Task.detached { [snapshots, query, activeStatuses] in
+        visibleKeysTask = Task.detached { [snapshots, query, activeStatuses, activeFilterRegeln] in
             // Debounce sleep (cancellable)
             do {
                 try await Task.sleep(nanoseconds: debounceMillis * 1_000_000)
@@ -223,7 +243,7 @@ class XLSXViewModel {
             // Build predicate for filtering on snapshots (pure, Sendable)
             let lowerQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-            if lowerQuery.isEmpty && activeStatuses == [.added,.removed,.modified] && !onlyDup {
+            if lowerQuery.isEmpty && activeStatuses == [.added,.removed,.modified] && activeFilterRegeln == [] {
             // Einfach alle vorhandenen Keys übernehmen statt rekursiv zu filtern!
             var allKeys = Set<String>()
             func collectAll(from nodes: [NodeSnapshot]) {
@@ -256,7 +276,7 @@ class XLSXViewModel {
                         return false
                     }
                 }
-
+                
                 // 2. Kategorie-Filter
                 let matchesStatus: Bool = {
                             switch node.status {
@@ -268,8 +288,45 @@ class XLSXViewModel {
                         }()
                         if !matchesStatus { return false }
 
+                let matchFilter: Bool = {
+                    // Keine FilterRegel ausgewählt -> alles anzeigen
+                    if activeFilterRegeln.isEmpty { return true }
+
+                    // Zelle in einzelne Status-Codes zerlegen (Trenner: Komma, Semikolon, Schrägstrich, Leerzeichen)
+                    let separators = CharacterSet(charactersIn: ",;/ ")
+                    let codes = node.StatusObjekt
+                        .components(separatedBy: separators)
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
+
+                    var matched: Set<FilterRegeln> = []
+
+                    for code in codes {
+                        switch code {
+                        case "F":  matched.insert(.Fehlt)
+                        case "U":  matched.insert(.ursprünglich)
+                        case "ÜB": matched.insert(.ueberSTAN)
+                        case "NV": matched.insert(.nichtverfuegbar)
+                        case "V":  matched.insert(.verfuegbar)
+                        case "T":  matched.insert(.teilweise)
+                        case "A":  matched.insert(.Ausgetauscht)
+                        default: break
+                        }
+                    }
+
+                    if !node.fremdbeschaft.isEmpty {
+                        matched.insert(.Fremdbeschafft)
+                    }
+
+                    // Anzeigen, sobald mindestens eine Bedingung erfüllt ist
+                    return !activeFilterRegeln.isDisjoint(with: matched)
+                }()
+                if !matchFilter { return false }
+                
                 return true
             }
+            
+            
 
             // FIX: Nutze lokale Variable statt inout-Mutation in Task.detached
             var keys = Set<String>()
