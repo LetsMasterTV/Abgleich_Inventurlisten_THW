@@ -54,7 +54,8 @@ import SwiftUI
 struct ModifiedBestandsobjektRow: View {
     let old: Bestandsobjekt
     let new: Bestandsobjekt
-    var hideDescription: Bool = false // NEU: Standardmäßig sichtbar
+    var hideDescription: Bool = false
+    var hideProperties: Bool = false
  
     private var changes: [Bestandsobjekt.FieldChange] {
         Bestandsobjekt.fieldChanges(from: old, to: new)
@@ -101,23 +102,24 @@ struct ModifiedBestandsobjektRow: View {
                     }
                 }
             }
+            if (!hideProperties) {
             // Alle Felder wie bei BestandsobjektRow, aber geänderte Felder zeigen Alt/Neu
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                GridRow(alignment: .top) {
-                    fieldCell("Ebene", new.Ebene)
-                    fieldCell("Ortseinheit", new.Ortseinheit)
-                    fieldCell("Art", new.Art)
-                    fieldCell("Fremdbeschafft", new.Fremdbeschaft)
-                    fieldCell("Menge_STAN", new.Menge_STAN)
-                    fieldCell("Menge Ist", new.Menge_ist)
-                    fieldCell("Verfügbar", new.Verfuegbar)
-                    fieldCell("Ausstattung | Hersteller | Typ", new.Beschreibung)
-                    fieldCell("Sachnummer", new.Sachnummer)
-                    fieldCell("Inventarnummer", new.Inventarnummer)
-                    fieldCell("Gerätenummer", new.Geraetenummer)
-                    fieldCell("Status", new.Status)
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                    GridRow(alignment: .top) {
+                        fieldCell("Ebene", new.Ebene)
+                        fieldCell("Ortseinheit", new.Ortseinheit)
+                        fieldCell("Art", new.Art)
+                        fieldCell("Fremdbeschafft", new.Fremdbeschaft)
+                        fieldCell("Menge_STAN", new.Menge_STAN)
+                        fieldCell("Menge Ist", new.Menge_ist)
+                        fieldCell("Verfügbar", new.Verfuegbar)
+                        fieldCell("Ausstattung | Hersteller | Typ", new.Beschreibung)
+                        fieldCell("Sachnummer", new.Sachnummer)
+                        fieldCell("Inventarnummer", new.Inventarnummer)
+                        fieldCell("Gerätenummer", new.Geraetenummer)
+                        fieldCell("Status", new.Status)
+                    }
                 }
-            
             }
         }
         .padding(.vertical, 7)
@@ -131,7 +133,7 @@ struct ModifiedBestandsobjektRow: View {
             // Geändertes Feld: alter Wert durchgestrichen/rot, neuer Wert grün darunter
             VStack(alignment: .center, spacing: 8) {
                 Text("\(label):")
-                    .font(.subheadline)
+                    .font(.headline)
                     .foregroundStyle(.secondary)
                 Text(change.newValue.isEmpty ? "–" : change.newValue)
                     .font(.headline)

@@ -7,13 +7,23 @@
 import SwiftUI
 import Foundation
 
-enum FilterStatus: String, CaseIterable, Identifiable, Sendable {
+enum FilterStatus: String, CaseIterable, Identifiable, Sendable, Equatable {
     case added = "Neu:"
     case removed = "Entfernt:"
     case modified = "Geändert:"
     case unchanged = "Unverändert:"
     
     var id: String { rawValue }
+    
+    nonisolated static func == (lhs: FilterStatus, rhs: FilterStatus) -> Bool {
+        switch (lhs, rhs) {
+        case (.added, .added): return true
+        case (.removed, .removed): return true
+        case (.modified, .modified): return true
+        case (.unchanged, .unchanged): return true
+        default: return false
+        }
+    }
 }
 
 enum FilterRegeln: String, CaseIterable, Identifiable, Sendable {
@@ -29,23 +39,7 @@ enum FilterRegeln: String, CaseIterable, Identifiable, Sendable {
     var id: String {rawValue}
 }
 
-/// Sendable Snapshot eines Knotens für Background-Filterung
-private enum StatusSnapshot: Sendable, Equatable {
-    case added
-    case removed
-    case modified
-    case unchanged
-    
-    nonisolated static func == (lhs: StatusSnapshot, rhs: StatusSnapshot) -> Bool {
-        switch (lhs, rhs) {
-        case (.added, .added): return true
-        case (.removed, .removed): return true
-        case (.modified, .modified): return true
-        case (.unchanged, .unchanged): return true
-        default: return false
-        }
-    }
-}
+/// Sendable Snapshot eines Knotens für Background-Filter
 
 private struct NodeSnapshot: Sendable {
     let id: String
@@ -56,7 +50,7 @@ private struct NodeSnapshot: Sendable {
     let sachnummer: String
     let inventarnummer: String
     let geraetenummer: String
-    let status: StatusSnapshot
+    let status: FilterStatus
     let oldBeschreibung: String?
     let oldSachnummer: String?
     let oldInventarnummer: String?
@@ -69,16 +63,43 @@ private struct NodeSnapshot: Sendable {
 private func collectVisibleKeysFromSnapshots(
     _ nodes: [NodeSnapshot],
     predicate: @Sendable (NodeSnapshot) -> Bool,
-    into set: inout Set<String>
+    visibleKeys: inout Set<String>,
+    matchedKeys: inout Set<String>
 ) -> Bool {
+
     var anyMatch = false
+
     for node in nodes {
-        let childrenMatch = collectVisibleKeysFromSnapshots(node.children, predicate: predicate, into: &set)
-        if predicate(node) || childrenMatch {
-            set.insert(node.id)
+
+        // Passt dieses Bestandsobjekt selbst?
+        let selfMatches = predicate(node)
+
+        // Prüfen, ob eines der Kinder passt
+        // Passt dieses Bestandsobjekt selbst?
+
+        // Prüfen, ob eines der Kinder passt
+        let childrenMatch = collectVisibleKeysFromSnapshots(
+            node.children,
+            predicate: predicate,
+            visibleKeys: &visibleKeys,
+            matchedKeys: &matchedKeys
+        )
+
+        // Nur wenn das Objekt SELBST matched,
+        // kommt es in matchedKeys.
+        if selfMatches {
+            matchedKeys.insert(node.id)
+        }
+
+        // Für die bestehende Baumdarstellung bleibt
+        // das Objekt sichtbar, wenn es selbst oder ein
+        // Kind matched.
+        if selfMatches || childrenMatch {
+            visibleKeys.insert(node.id)
             anyMatch = true
         }
     }
+
     return anyMatch
 }
 
@@ -127,6 +148,9 @@ class XLSXViewModel {
     private(set) var visibleKeysCache: Set<String> = []
     var visibleKeys: Set<String> { visibleKeysCache }
 
+    private(set) var matchedKeysCache: Set<String> = []
+    var matchedKeys: Set<String> { matchedKeysCache }
+    
     private(set) var expandedKeys: Set<String> = []
 
     // MARK: - Background Task Management
@@ -169,7 +193,7 @@ class XLSXViewModel {
     private func buildSnapshots(from nodes: [HierarchyNode]) -> [NodeSnapshot] {
         nodes.map { node in
             
-            let statusSnap: StatusSnapshot
+            let FilterStatus: FilterStatus
             var oldB: String?
             var oldS: String?
             var oldI: String?
@@ -178,18 +202,18 @@ class XLSXViewModel {
             // 1. Status und alte Werte sauber über Pattern Matching extrahieren
             switch node.status {
             case .added:
-                statusSnap = .added
+                FilterStatus = .added
             case .removed:
-                statusSnap = .removed
+                FilterStatus = .removed
             case .modified(let oldObj):
                 // Hier entpacken wir das assoziierte alte Objekt!
-                statusSnap = .modified
+                FilterStatus = .modified
                 oldB = oldObj.Beschreibung
                 oldS = oldObj.Sachnummer
                 oldI = oldObj.Inventarnummer
                 oldG = oldObj.Geraetenummer
             case .unchanged:
-                statusSnap = .unchanged
+                FilterStatus = .unchanged
             }
             
             // 2. Thread-sicheren Snapshot für den Hintergrund-Task erstellen
@@ -202,7 +226,7 @@ class XLSXViewModel {
                 sachnummer: node.objekt.Sachnummer,
                 inventarnummer: node.objekt.Inventarnummer,
                 geraetenummer: node.objekt.Geraetenummer,
-                status: statusSnap,
+                status: FilterStatus,
                 oldBeschreibung: oldB,
                 oldSachnummer: oldS,
                 oldInventarnummer: oldI,
@@ -226,7 +250,6 @@ class XLSXViewModel {
         let query = self.searchText
         let activeFilterRegeln = self.selectedFilterRegeln
         let activeStatuses = self.selectedStatuses
-        let onlyDup = self.showOnlyDuplicates
        
 
         // Start detached background task
@@ -329,14 +352,22 @@ class XLSXViewModel {
             
 
             // FIX: Nutze lokale Variable statt inout-Mutation in Task.detached
-            var keys = Set<String>()
-            _ = await collectVisibleKeysFromSnapshots(snapshots, predicate: predicate, into: &keys)
+            var visibleKeys = Set<String>()
+            var matchedKeys = Set<String>()
+
+            _ = collectVisibleKeysFromSnapshots(
+                snapshots,
+                predicate: predicate,
+                visibleKeys: &visibleKeys,
+                matchedKeys: &matchedKeys
+            )
 
             if Task.isCancelled { return }
 
             // Write result back on MainActor
             await MainActor.run {
-                self.visibleKeysCache = keys
+                self.visibleKeysCache = visibleKeys
+                self.matchedKeysCache = matchedKeys
             }
         }
     }
@@ -378,9 +409,11 @@ class XLSXViewModel {
             )
 
             // 2. Reduzierten Baum & Aufklapp-Keys in EINEM Durchlauf berechnen
-            let (pruned, prunedExpanded) = pruneToChangesOnly(fullHierarchyRoots)
+            let (pruned, prunedExpanded, matchedkeys) = pruneToChangesOnly(fullHierarchyRoots)
             prunedHierarchyRoots = pruned
             defaultExpandedPruned = prunedExpanded
+            
+            matchedKeysCache = matchedkeys
 
             // 3. Für den vollen Baum nur die Hauptkategorien (Ebene 0) aufklappen
             defaultExpandedFull = Set(fullHierarchyRoots.map(\.id))

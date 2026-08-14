@@ -145,18 +145,21 @@ func buildFullHierarchy(
 /// Reduziert einen vollständigen Baum auf die Knoten, die SELBST geändert/neu/entfernt sind,
 /// oder mindestens einen solchen Nachfahren enthalten. Reine Kontext-Vorfahren bleiben erhalten
 /// (damit man überhaupt zur Änderung navigieren kann), rein unveränderte Äste fallen komplett weg.
-func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> (nodes: [HierarchyNode], expandedKeys: Set<String>) {
+func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> (nodes: [HierarchyNode], expandedKeys: Set<String>, matchedKeys: Set<String>) {
     var resultNodes: [HierarchyNode] = []
     var expandedKeys: Set<String> = []
-
+    var matchedKeys: Set<String> = []
+    
     for node in nodes {
-        let (prunedChildren, childKeys) = pruneToChangesOnly(node.children)
+        let (prunedChildren, childKeys, childmatchedKeys) = pruneToChangesOnly(node.children)
 
         let selfIsChanged: Bool = {
             if case .unchanged = node.status { return false }
             return true
         }()
-
+            
+        
+        
         if selfIsChanged || !prunedChildren.isEmpty {
             let newNode = HierarchyNode(id: node.id, objekt: node.objekt, status: node.status, children: prunedChildren)
             resultNodes.append(newNode)
@@ -166,8 +169,13 @@ func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> (nodes: [HierarchyNode], ex
             if !prunedChildren.isEmpty {
                 expandedKeys.insert(newNode.id)
             }
+            
+            matchedKeys.formUnion(childmatchedKeys)
+            if selfIsChanged {
+                matchedKeys.insert(newNode.id)
+            }
         }
     }
 
-    return (resultNodes, expandedKeys)
+    return (resultNodes, expandedKeys, matchedKeys)
 }

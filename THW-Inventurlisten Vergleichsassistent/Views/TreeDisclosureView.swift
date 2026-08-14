@@ -12,7 +12,7 @@ struct TreeDisclosureView<Content: View>: View {
     let visibleKeys: Set<String>
     @ViewBuilder let content: (HierarchyNode) -> Content
 
-    private let globalSpacing: CGFloat = 8
+    private let globalSpacing: CGFloat = 10
     
     @ViewBuilder
     var body: some View {
@@ -38,13 +38,14 @@ struct TreeDisclosureView<Content: View>: View {
                             .fill(Color.primary.opacity(0.18)) // Farbe & Transparenz des Strichs
                             .frame(width: 2)                  // Dicke des Strichs (2 pt)
                             .padding(.leading, 20)
-                            .padding(.top, -globalSpacing - 4)    // Zieht den Strich nach oben in den Header-Bereich hinein
-                        
+                            .padding(.top, 2)
+                    
                         
                         LazyVStack(alignment: .leading, spacing: 0) { // TODO: Abstand einstellen
                             ForEach(visibleChildren) { child in
                                 TreeDisclosureView(node: child, expanded: $expanded, visibleKeys: visibleKeys, content: content)
                                     .padding(.leading, 8)
+                                    .padding(.vertical, globalSpacing)
                             }
                         }
                         .padding(.leading, 5)

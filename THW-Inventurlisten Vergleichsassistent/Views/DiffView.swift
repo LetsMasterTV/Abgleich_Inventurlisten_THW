@@ -30,6 +30,7 @@ struct DiffView: View {
     
     @State private var showDuplicateDetails = false
     
+    @State private var hideUnmatchedProperties = false
     @State private var hideDescriptions = false
     @State private var showFilters = false
     
@@ -171,7 +172,21 @@ struct DiffView: View {
     private var ShowOptionsSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Toggle("Überschriften ausblenden", isOn: $hideDescriptions)
+                Toggle("Überschriften ausblenden", isOn: Binding(
+                        get: { hideDescriptions },
+                        set: { newValue in
+                            hideDescriptions = newValue
+                            hideUnmatchedProperties = false // Ändert den anderen State
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                Toggle("Unnötige Infos ausblenden", isOn: Binding(
+                        get: { hideUnmatchedProperties },
+                        set: { newValue in
+                            hideUnmatchedProperties = newValue
+                            hideDescriptions = false // Ändert den anderen State
+                        }
+                    ))
                     .toggleStyle(.switch)
                 Spacer()
                 Button {
@@ -334,20 +349,22 @@ struct DiffView: View {
     @ViewBuilder
     private func hierarchyRow(for node: HierarchyNode) -> some View {
         
+        let unMatched = !viewModel.matchedKeys.contains(node.id) && hideUnmatchedProperties
+        
         Group {
             switch node.status {
             case .added:
-                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions, hideProperties: unMatched)
                 
             case .removed:
-                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions, hideProperties: unMatched)
                     .opacity(0.8)
                 
             case .modified(let old):
-                ModifiedBestandsobjektRow(old: old, new: node.objekt, hideDescription: hideDescriptions)
+                ModifiedBestandsobjektRow(old: old, new: node.objekt, hideDescription: hideDescriptions, hideProperties: unMatched)
                 
             case .unchanged:
-                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions)
+                BestandsobjektRow(objekt: node.objekt, hideDescription: hideDescriptions, hideProperties: unMatched)
                     .opacity(viewModel.selectedStatuses.contains(.unchanged) ? 1.0 : 0.55)
             }
         }
