@@ -39,6 +39,18 @@ enum FilterRegeln: String, CaseIterable, Identifiable, Sendable {
     var id: String {rawValue}
 }
 
+private struct FilterFlags: OptionSet, Sendable {
+    let rawValue: UInt16
+
+    static let fremdbeschafft   = FilterFlags(rawValue: 1 << 0)
+    static let ueberSTAN        = FilterFlags(rawValue: 1 << 1)
+    static let fehlt            = FilterFlags(rawValue: 1 << 2)
+    static let urspruenglich    = FilterFlags(rawValue: 1 << 3)
+    static let verfuegbar       = FilterFlags(rawValue: 1 << 4)
+    static let nichtverfuegbar  = FilterFlags(rawValue: 1 << 5)
+    static let ausgetauscht     = FilterFlags(rawValue: 1 << 6)
+    static let teilweise        = FilterFlags(rawValue: 1 << 7)
+}
 /// Sendable Snapshot eines Knotens für Background-Filter
 
 private struct NodeSnapshot: Sendable {
@@ -46,7 +58,7 @@ private struct NodeSnapshot: Sendable {
     let itemkey: String
     let beschreibung: String
     let fremdbeschaft: String
-    let StatusObjekt: String
+    let filterFlags: FilterFlags
     let sachnummer: String
     let inventarnummer: String
     let geraetenummer: String
@@ -56,6 +68,7 @@ private struct NodeSnapshot: Sendable {
     let oldInventarnummer: String?
     let oldGeraetenummer: String?
     let children: [NodeSnapshot]
+    let searchableFields: [String]
 }
 
 /// Pure Value Funktion: Rekursiv sichtbare Keys aus Snapshots sammeln
@@ -120,7 +133,7 @@ private func collectVisibleKeysFromSnapshots(
 /// - Access `diff`, `fullHierarchyRoots`, and `visibleKeys` to populate views.
 /// - Use `isExpanded(_:)`, `toggleExpanded(_:)` to manage node visibility per key.
 /// - Call `reset()` to clear all state and start over.
-
+@MainActor
 @Observable
 class XLSXViewModel {
     // MARK: - Document Loading
@@ -151,26 +164,54 @@ class XLSXViewModel {
     private(set) var matchedKeysCache: Set<String> = []
     var matchedKeys: Set<String> { matchedKeysCache }
     
+    private var filterSnapshots: [NodeSnapshot] = []
+    
     private(set) var expandedKeys: Set<String> = []
 
     // MARK: - Background Task Management
     private var visibleKeysTask: Task<Void, Never>?
-
+    private var loadTask: Task<Void, Never>?
+    
     // MARK: - Loading
     func load(data: Data, as slot: DocumentSlot) {
+        loadTask?.cancel()
         errorMessage = nil
-        do {
-            let document = try Inventurliste(data: data)
-            switch slot {
-            case .old: oldDocument = document
-            case .new: newDocument = document
+        
+        loadTask = Task {
+            do {
+                let document = try await Task.detached(
+                    priority: .userInitiated
+                ) {
+                    try Inventurliste(data: data)
+                }.value
+                
+                guard !Task.isCancelled else { return }
+                switch slot {
+                case .old:
+                    oldDocument = document
+                case .new:
+                    newDocument = document
+                }
+                
+                guard let oldDocument, let newDocument else {
+                    return
+                }
+                
+                let newDiff = try await Task.detached(
+                    priority: .userInitiated
+                ) {
+                    oldDocument.diff(against: newDocument)
+                }.value
+                
+                guard !Task.isCancelled else { return }
+                
+                apply(diff: newDiff)
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = "Fehler beim Parsen: \(error.localizedDescription)"
             }
-            recomputeDiffIfPossible()
-        } catch {
-            errorMessage = "Fehler beim Parsen: \(error.localizedDescription)"
         }
     }
-
     // MARK: - Reset
     func reset() {
         oldDocument = nil
@@ -182,9 +223,11 @@ class XLSXViewModel {
         selectedFilterRegeln = []
         showOnlyDuplicates = false
         visibleKeysCache = []
+        matchedKeysCache = []
         expandedKeys = []
         fullHierarchyRoots = []
         visibleKeysTask?.cancel()
+        filterSnapshots.removeAll()
     }
    
 
@@ -222,7 +265,10 @@ class XLSXViewModel {
                 itemkey: node.objekt.key,
                 beschreibung: node.objekt.Beschreibung,
                 fremdbeschaft: node.objekt.Fremdbeschafft,
-                StatusObjekt: node.objekt.Status,
+                filterFlags: makeFilterFlags(
+                    status: node.objekt.Status,
+                    fremdbeschafft: node.objekt.Fremdbeschafft
+                ),
                 sachnummer: node.objekt.Sachnummer,
                 inventarnummer: node.objekt.Inventarnummer,
                 geraetenummer: node.objekt.Geraetenummer,
@@ -231,7 +277,17 @@ class XLSXViewModel {
                 oldSachnummer: oldS,
                 oldInventarnummer: oldI,
                 oldGeraetenummer: oldG,
-                children: buildSnapshots(from: node.children)
+                children: buildSnapshots(from: node.children),
+                searchableFields: [
+                    node.objekt.Beschreibung.lowercased(),
+                    node.objekt.Sachnummer.lowercased(),
+                    node.objekt.Inventarnummer.lowercased(),
+                    node.objekt.Geraetenummer.lowercased(),
+                    oldB?.lowercased() ?? "",
+                    oldS?.lowercased() ?? "",
+                    oldI?.lowercased() ?? "",
+                    oldG?.lowercased() ?? ""
+                ]
             )
         }
     }
@@ -243,8 +299,7 @@ class XLSXViewModel {
         visibleKeysTask?.cancel()
 
         // Build snapshot on MainActor (safe access to HierarchyNode objects)
-        let roots = self.fullHierarchyRoots
-        let snapshots = buildSnapshots(from: roots)
+        let snapshots = self.filterSnapshots
 
         // Capture filter state as Sendable copies
         let query = self.searchText
@@ -265,40 +320,83 @@ class XLSXViewModel {
 
             // Build predicate for filtering on snapshots (pure, Sendable)
             let lowerQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-            if lowerQuery.isEmpty && activeStatuses == [.added,.removed,.modified] && activeFilterRegeln == [] {
-            // Einfach alle vorhandenen Keys übernehmen statt rekursiv zu filtern!
-            var allKeys = Set<String>()
-            func collectAll(from nodes: [NodeSnapshot]) {
-                for n in nodes {
-                    allKeys.insert(n.id)
-                    collectAll(from: n.children)
+            
+            let activeFilterFlags = activeFilterRegeln.reduce(into: FilterFlags()) {
+                switch $1 {
+                case .Fremdbeschafft:
+                    $0.insert(.fremdbeschafft)
+                case .ueberSTAN:
+                    $0.insert(.ueberSTAN)
+                case .Fehlt:
+                    $0.insert(.fehlt)
+                case .ursprünglich:
+                    $0.insert(.urspruenglich)
+                case .verfuegbar:
+                    $0.insert(.verfuegbar)
+                case .nichtverfuegbar:
+                    $0.insert(.nichtverfuegbar)
+                case .Ausgetauscht:
+                    $0.insert(.ausgetauscht)
+                case .teilweise:
+                    $0.insert(.teilweise)
                 }
             }
-            collectAll(from: snapshots)
-            
-            if !Task.isCancelled {
-                await MainActor.run { self.visibleKeysCache = allKeys }
+            if lowerQuery.isEmpty &&
+               activeStatuses == [.added, .removed, .modified] &&
+               activeFilterRegeln.isEmpty {
+
+                var allKeys = Set<String>()
+                var matchedKeys = Set<String>()
+
+                func collectAll(from nodes: [NodeSnapshot]) {
+                    for node in nodes {
+
+            allKeys.insert(node.id)
+
+            // Bei komplett deaktivierten Zusatzfiltern
+            // entsprechen die Matches den Statusfiltern.
+            switch node.status {
+            case .added:
+                if activeStatuses.contains(.added) {
+                    matchedKeys.insert(node.id)
+                }
+
+            case .removed:
+                if activeStatuses.contains(.removed) {
+                    matchedKeys.insert(node.id)
+                }
+
+            case .modified:
+                if activeStatuses.contains(.modified) {
+                    matchedKeys.insert(node.id)
+                }
+
+            case .unchanged:
+                if activeStatuses.contains(.unchanged) {
+                    matchedKeys.insert(node.id)
+                }
             }
-            return
+
+            collectAll(from: node.children)
         }
+    }
+
+    collectAll(from: snapshots)
+
+    if !Task.isCancelled {
+        await MainActor.run {
+            self.visibleKeysCache = allKeys
+            self.matchedKeysCache = matchedKeys
+        }
+    }
+
+    return
+}
+
+        
             let predicate: @Sendable (NodeSnapshot) -> Bool = { node in
                 // 1. Suchtext-Prüfung
-                if !lowerQuery.isEmpty {
-                    let matchesSearch = node.beschreibung.lowercased().contains(lowerQuery) ||
-                                        node.sachnummer.lowercased().contains(lowerQuery) ||
-                                        node.inventarnummer.lowercased().contains(lowerQuery) ||
-                                        node.geraetenummer.lowercased().contains(lowerQuery) ||
-                                        (node.oldBeschreibung?.lowercased().contains(lowerQuery) ?? false) ||
-                                        (node.oldSachnummer?.lowercased().contains(lowerQuery) ?? false) ||
-                                        (node.oldInventarnummer?.lowercased().contains(lowerQuery) ?? false) ||
-                                        (node.oldGeraetenummer?.lowercased().contains(lowerQuery) ?? false)
-                    
-                    // Wenn der Suchbegriff in keinem Feld vorkommt -> Element sofort aussortieren!
-                    if !matchesSearch {
-                        return false
-                    }
-                }
+                
                 
                 // 2. Kategorie-Filter
                 let matchesStatus: Bool = {
@@ -311,40 +409,22 @@ class XLSXViewModel {
                         }()
                         if !matchesStatus { return false }
 
-                let matchFilter: Bool = {
-                    // Keine FilterRegel ausgewählt -> alles anzeigen
-                    if activeFilterRegeln.isEmpty { return true }
-
-                    // Zelle in einzelne Status-Codes zerlegen (Trenner: Komma, Semikolon, Schrägstrich, Leerzeichen)
-                    let separators = CharacterSet(charactersIn: ",;/ ")
-                    let codes = node.StatusObjekt
-                        .components(separatedBy: separators)
-                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                        .filter { !$0.isEmpty }
-
-                    var matched: Set<FilterRegeln> = []
-
-                    for code in codes {
-                        switch code {
-                        case "F":  matched.insert(.Fehlt)
-                        case "U":  matched.insert(.ursprünglich)
-                        case "ÜB": matched.insert(.ueberSTAN)
-                        case "NV": matched.insert(.nichtverfuegbar)
-                        case "V":  matched.insert(.verfuegbar)
-                        case "T":  matched.insert(.teilweise)
-                        case "A":  matched.insert(.Ausgetauscht)
-                        default: break
-                        }
+                
+                if !activeFilterFlags.isEmpty &&
+                    node.filterFlags.isSuperset(of: activeFilterFlags) {
+                    return false
+                }
+                
+                if !lowerQuery.isEmpty {
+                    let matchesSearch = node.searchableFields.contains {
+                        $0.contains(lowerQuery)
                     }
-
-                    if !node.fremdbeschaft.isEmpty {
-                        matched.insert(.Fremdbeschafft)
+                    
+                    // Wenn der Suchbegriff in keinem Feld vorkommt -> Element sofort aussortieren!
+                    if !matchesSearch {
+                        return false
                     }
-
-                    // Anzeigen, sobald mindestens eine Bedingung erfüllt ist
-                    return !activeFilterRegeln.isDisjoint(with: matched)
-                }()
-                if !matchFilter { return false }
+                }
                 
                 return true
             }
@@ -372,6 +452,47 @@ class XLSXViewModel {
         }
     }
 
+    private func makeFilterFlags(
+        status: String,
+        fremdbeschafft: String
+    ) -> FilterFlags {
+
+        var result: FilterFlags = []
+
+        let separators = CharacterSet(charactersIn: ",;/ ")
+
+        for code in status
+            .components(separatedBy: separators)
+            .map({ $0.trimmingCharacters(in: .whitespaces) })
+            .filter({ !$0.isEmpty })
+        {
+            switch code {
+            case "F":
+                result.insert(.fehlt)
+            case "U":
+                result.insert(.urspruenglich)
+            case "ÜB":
+                result.insert(.ueberSTAN)
+            case "NV":
+                result.insert(.nichtverfuegbar)
+            case "V":
+                result.insert(.verfuegbar)
+            case "T":
+                result.insert(.teilweise)
+            case "A":
+                result.insert(.ausgetauscht)
+            default:
+                break
+            }
+        }
+
+        if !fremdbeschafft.isEmpty {
+            result.insert(.fremdbeschafft)
+        }
+
+        return result
+    }
+    
     // MARK: - Expansion State Management
     func isExpanded(_ key: String) -> Bool {
         expandedKeys.contains(key)
@@ -420,4 +541,29 @@ class XLSXViewModel {
 
             scheduleRecomputeVisibleKeysDetached()
         }
+    
+    @MainActor
+    private func apply(diff newDiff: XLSXDiff) {
+        guard let oldDocument, let newDocument else { return }
+
+        diff = newDiff
+
+        fullHierarchyRoots = buildFullHierarchy(
+            newItems: newDocument.inventurliste,
+            oldItems: oldDocument.inventurliste,
+            diff: newDiff
+        )
+
+        let (pruned, prunedExpanded, matchedkeys) =
+            pruneToChangesOnly(fullHierarchyRoots)
+
+        prunedHierarchyRoots = pruned
+        defaultExpandedPruned = prunedExpanded
+        matchedKeysCache = matchedkeys
+        defaultExpandedFull = Set(fullHierarchyRoots.map(\.id))
+
+        filterSnapshots = buildSnapshots(from: fullHierarchyRoots)
+
+        scheduleRecomputeVisibleKeysDetached()
+    }
 }

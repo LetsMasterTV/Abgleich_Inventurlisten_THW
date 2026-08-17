@@ -70,7 +70,7 @@ import Foundation
     /// - Note: The `id` property is intentionally ignored to allow semantic equality
     ///   independent of instance identity, which is useful for diffing and change tracking.
 
-    struct Bestandsobjekt: Identifiable, Equatable {
+    struct Bestandsobjekt: Identifiable, Equatable, Hashable, Sendable{
         let id = UUID()
         let Zeile: Int   // Original-Zeilennummer aus der Excel-Datei – stabile Reihenfolge für den Hierarchie-Aufbau
         let Ebene: String
@@ -93,18 +93,22 @@ import Foundation
         // Manuelles Equatable: die zufällige UUID und die Zeilennummer dürfen NICHT mit verglichen werden –
         // eine Zeile kann in der neuen Datei an anderer Position stehen, ohne inhaltlich "geändert" zu sein.
         static func == (lhs: Bestandsobjekt, rhs: Bestandsobjekt) -> Bool {
-            lhs.Ebene == rhs.Ebene &&
-            lhs.Ortseinheit == rhs.Ortseinheit &&
-            lhs.Art == rhs.Art &&
-            lhs.Fremdbeschafft == rhs.Fremdbeschafft &&
-            lhs.Menge_STAN == rhs.Menge_STAN &&
-            lhs.Menge_ist == rhs.Menge_ist &&
-            lhs.Verfuegbar == rhs.Verfuegbar &&
-            lhs.Beschreibung == rhs.Beschreibung &&
-            lhs.Sachnummer == rhs.Sachnummer &&
-            lhs.Inventarnummer == rhs.Inventarnummer &&
-            lhs.Geraetenummer == rhs.Geraetenummer &&
-            lhs.Status == rhs.Status
+            lhs.hashValue == rhs.hashValue
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(Ebene)
+            hasher.combine(Ortseinheit)
+            hasher.combine(Art)
+            hasher.combine(Fremdbeschafft)
+            hasher.combine(Menge_STAN)
+            hasher.combine(Menge_ist)
+            hasher.combine(Verfuegbar)
+            hasher.combine(Beschreibung)
+            hasher.combine(Sachnummer)
+            hasher.combine(Inventarnummer)
+            hasher.combine(Geraetenummer)
+            hasher.combine(Status)
         }
      
         /// Baut ein Bestandsobjekt aus einem [Spaltenname: Wert]-Dictionary einer Excel-Zeile.

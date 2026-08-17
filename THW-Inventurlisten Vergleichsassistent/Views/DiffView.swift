@@ -43,6 +43,7 @@ struct DiffView: View {
     // Breadcrumb-Pfad
     @State private var breadcrumbParts: [String] = []
     @State private var nodePositions: [String: CGFloat] = [:]
+    @State private var nodeReferences: [String: HierarchyNode] = [:]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -68,12 +69,7 @@ struct DiffView: View {
                     
                     Divider()
                 }
-                
-                
-                    ScrollSection
-                
-                
-                
+                ScrollSection
             }
         }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Beschreibung, Sachnr., Inventarnr., Gerätenr.")
@@ -351,7 +347,7 @@ struct DiffView: View {
     
     @ViewBuilder
     private func hierarchyRow(for node: HierarchyNode) -> some View {
-        
+
         let unMatched = !viewModel.matchedKeys.contains(node.id) && hideUnmatchedProperties
         
         Group {
@@ -376,11 +372,13 @@ struct DiffView: View {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named("scrollSpace")).minY
         } action: { newMinY in
+            nodeReferences[node.id] = node
             nodePositions[node.id] = newMinY
             updateBreadcrumbFromTracker()
         }
         .onDisappear {
             nodePositions.removeValue(forKey: node.id)
+            nodeReferences.removeValue(forKey: node.id)
         }
     }
     
@@ -393,51 +391,61 @@ struct DiffView: View {
     private func updateBreadcrumbFromTracker() {
         guard !nodePositions.isEmpty else { return }
 
-        let passed = nodePositions.filter { $0.value <= 20 }
-        let topID = passed.max(by: { $0.value < $1.value })?.key
-            ?? nodePositions.min(by: { $0.value < $1.value })?.key
+        var passedID: String?
+        var passedY: CGFloat?
 
-        guard let topID else { return }
-        computeBreadcrumb(for: topID)
-    }
-    
-    private func computeBreadcrumb(for id: String) {
-        guard let path = pathToNode(id: id, in: displayedRoots) else {
+        var nearestID: String?
+        var nearestY: CGFloat?
+
+        for (id, y) in nodePositions {
+            if y <= 20,
+               passedY == nil || y > passedY! {
+                passedID = id
+                passedY = y
+            }
+
+            if nearestY == nil || y < nearestY! {
+                nearestID = id
+                nearestY = y
+            }
+        }
+
+        let topID = passedID ?? nearestID
+
+        guard let topID,
+              let node = nodeReferences[topID] else {
             return
         }
-        
-        let parts = path.map { node -> String in
-            let beschr = node.objekt.Beschreibung.trimmingCharacters(in: .whitespacesAndNewlines)
-            return beschr.isEmpty ? node.objekt.key : beschr
+
+        computeBreadcrumb(for: node)
+    }
+    
+    private func computeBreadcrumb(for node: HierarchyNode) {
+        var parts: [String] = []
+        var current: HierarchyNode? = node
+
+        while let currentNode = current {
+            let beschreibung =
+                currentNode.objekt.Beschreibung
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            parts.append(
+                beschreibung.isEmpty
+                    ? currentNode.objekt.key
+                    : beschreibung
+            )
+
+            current = currentNode.parent
         }
-        
+
+        parts.reverse()
+
         if breadcrumbParts != parts {
             breadcrumbParts = parts
         }
     }
     
-    private func pathToNode(id: String, in roots: [HierarchyNode]) -> [HierarchyNode]? {
-        for root in roots {
-            if let path = pathRecursive(current: root, targetID: id) {
-                return path
-            }
-        }
-        return nil
-    }
     
-    private func pathRecursive(current: HierarchyNode, targetID: String) -> [HierarchyNode]? {
-        if current.id == targetID {
-            return [current]
-        }
-        for child in current.children {
-            if let subpath = pathRecursive(current: child, targetID: targetID) {
-                var p = [current]
-                p.append(contentsOf: subpath)
-                return p
-            }
-        }
-        return nil
-    }
     
     // MARK: - Subviews
     

@@ -67,9 +67,17 @@ struct ModifiedBestandsobjektRow: View {
     }
  
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let changes = Bestandsobjekt.fieldChanges(from: old, to: new)
+
+            let changesByLabel = Dictionary(
+                uniqueKeysWithValues: changes.map {
+                    ($0.label, $0)
+                }
+            )
+
+            return VStack(alignment: .leading, spacing: 8) {
             if !hideDescription {
-                if let beschreibungChange = change(for: "Beschreibung") {
+                if let beschreibungChange = changesByLabel["Beschreibung"] {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(beschreibungChange.newValue.isEmpty ? "(ohne Beschreibung)" : beschreibungChange.newValue)
@@ -106,18 +114,18 @@ struct ModifiedBestandsobjektRow: View {
             // Alle Felder wie bei BestandsobjektRow, aber geänderte Felder zeigen Alt/Neu
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                     GridRow(alignment: .top) {
-                        fieldCell("Ebene", new.Ebene)
-                        fieldCell("Ortseinheit", new.Ortseinheit)
-                        fieldCell("Art", new.Art)
-                        fieldCell("Fremdbeschafft", new.Fremdbeschafft)
-                        fieldCell("Menge STAN", new.Menge_STAN)
-                        fieldCell("Menge Ist", new.Menge_ist)
-                        fieldCell("Verfügbar", new.Verfuegbar)
-                        fieldCell("Ausstattung | Hersteller | Typ", new.Beschreibung)
-                        fieldCell("Sachnummer", new.Sachnummer)
-                        fieldCell("Inventarnummer", new.Inventarnummer)
-                        fieldCell("Gerätenummer", new.Geraetenummer)
-                        fieldCell("Status", new.Status)
+                        fieldCell("Ebene", new.Ebene, changesByLabel: changesByLabel)
+                        fieldCell("Ortseinheit", new.Ortseinheit, changesByLabel: changesByLabel)
+                        fieldCell("Art", new.Art, changesByLabel: changesByLabel)
+                        fieldCell("Fremdbeschafft", new.Fremdbeschafft, changesByLabel: changesByLabel)
+                        fieldCell("Menge STAN", new.Menge_STAN, changesByLabel: changesByLabel)
+                        fieldCell("Menge Ist", new.Menge_ist, changesByLabel: changesByLabel)
+                        fieldCell("Verfügbar", new.Verfuegbar, changesByLabel: changesByLabel)
+                        fieldCell("Ausstattung | Hersteller | Typ", new.Beschreibung, changesByLabel: changesByLabel)
+                        fieldCell("Sachnummer", new.Sachnummer, changesByLabel: changesByLabel)
+                        fieldCell("Inventarnummer", new.Inventarnummer, changesByLabel: changesByLabel)
+                        fieldCell("Gerätenummer", new.Geraetenummer, changesByLabel: changesByLabel)
+                        fieldCell("Status", new.Status, changesByLabel: changesByLabel)
                     }
                 }
             }
@@ -128,8 +136,12 @@ struct ModifiedBestandsobjektRow: View {
     }
  
     @ViewBuilder
-    private func fieldCell(_ label: String, _ newValue: String) -> some View {
-        if let change = change(for: label) {
+    private func fieldCell(
+        _ label: String,
+        _ newValue: String,
+        changesByLabel: [String: Bestandsobjekt.FieldChange]
+    ) -> some View {
+        if let change = changesByLabel[label] {
             // Geändertes Feld: alter Wert durchgestrichen/rot, neuer Wert grün darunter
             VStack(alignment: .center, spacing: 8) {
                 Text("\(label):")

@@ -32,7 +32,7 @@
 ///   updated state within the `modified` tuples.
 ///
 /// - SeeAlso: `Bestandsobjekt`
-struct XLSXDiff {
+struct XLSXDiff: Sendable {
     let added: [Bestandsobjekt]
     let removed: [Bestandsobjekt]
     let modified: [(alt: Bestandsobjekt, new: Bestandsobjekt)]

@@ -161,7 +161,17 @@ func pruneToChangesOnly(_ nodes: [HierarchyNode]) -> (nodes: [HierarchyNode], ex
         
         
         if selfIsChanged || !prunedChildren.isEmpty {
-            let newNode = HierarchyNode(id: node.id, objekt: node.objekt, status: node.status, children: prunedChildren)
+            let newNode = HierarchyNode(
+                id: node.id,
+                objekt: node.objekt,
+                status: node.status,
+                children: prunedChildren
+            )
+
+            for child in newNode.children {
+                child.parent = newNode
+            }
+
             resultNodes.append(newNode)
 
             // Sammle die Keys der Kinder und füge den eigenen Key hinzu, falls Kinder existieren

@@ -49,7 +49,7 @@ import Combine
 /// - Column addressing (e.g., “A”, “B”, …, “AA”) is translated to zero-based indices.
 /// - Header extraction pads missing columns with empty strings to maintain correct indexing.
 /// - This type is a lightweight wrapper around an immutable array; parsing happens only during initialization.
-struct Inventurliste {
+struct Inventurliste: Sendable{
         let inventurliste: [Bestandsobjekt]
      
         enum ParseError: Error, LocalizedError {
@@ -100,14 +100,33 @@ struct Inventurliste {
                     guard let headerows = allrows.first else { continue }
                     
                     let headers = Self.extractHeaders(from: headerows, sharedStrings: sharedStrings)
+                    var columnIndexCache: [String: Int] = [:]
+                    columnIndexCache.reserveCapacity(headers.count)
                     var rowCounter = 0
+                    
+                    var dict: [String: String] = [:]
+                    dict.reserveCapacity(headers.count)
                     
                     for row in allrows.dropFirst() {
                         rowCounter += 1
-                        var dict: [String: String] = [:]
-                        for cell in row.cells {
-                            guard let idx = Self.columnIndex(fromLetters: cell.reference.column.value),
-                                  idx < headers.count else { continue }
+                        dict.removeAll(keepingCapacity: true)
+
+                        for cell in row.cells {                  let columnLetters = cell.reference.column.value
+                            
+                            let idx: Int
+
+                            if let cachedIndex = columnIndexCache[columnLetters] {
+                                idx = cachedIndex
+                            } else {
+                                guard let calculatedIndex = Self.columnIndex(fromLetters: columnLetters),
+                                      calculatedIndex < headers.count else {
+                                    continue
+                                }
+
+                                columnIndexCache[columnLetters] = calculatedIndex
+                                idx = calculatedIndex
+                            }
+                            
                             let header = headers[idx]
                             guard !header.isEmpty else { continue }
                             
@@ -294,22 +313,51 @@ extension Inventurliste {
             let olds = oldGroups[pfad] ?? []
             let news = newGroups[pfad] ?? []
 
-            var matchedNewIndices = Set<Int>()
-            var matchedOldIndices = Set<Int>()
+            var newIndicesByValue: [Bestandsobjekt: [Int]] = [:]
+            newIndicesByValue.reserveCapacity(news.count)
 
-            for (oldIdx, oldItem) in olds.enumerated() {
-                for (newIdx, newItem) in news.enumerated() {
-                    if !matchedNewIndices.contains(newIdx) && oldItem == newItem {
-                        unchanged.append(newItem)
-                        matchedOldIndices.insert(oldIdx)
-                        matchedNewIndices.insert(newIdx)
-                        break
-                    }
-                }
+            for (newIdx, newItem) in news.enumerated() {
+                newIndicesByValue[newItem, default: []].append(newIdx)
             }
 
-            let remainingOlds = olds.enumerated().filter { !matchedOldIndices.contains($0.offset) }.map { $0.element }
-            let remainingNews = news.enumerated().filter { !matchedNewIndices.contains($0.offset) }.map { $0.element }
+            var nextIndexByValue: [Bestandsobjekt: Int] = [:]
+            nextIndexByValue.reserveCapacity(newIndicesByValue.count)
+
+            var matchedOldIndices = [Bool](repeating: false, count: olds.count)
+            var matchedNewIndices = [Bool](repeating: false, count: news.count)
+
+            for (oldIdx, oldItem) in olds.enumerated() {
+                guard let candidateIndices = newIndicesByValue[oldItem] else {
+                    continue
+                }
+                
+                let cursor = nextIndexByValue[oldItem, default: 0]
+
+                    guard cursor < candidateIndices.count else {
+                        continue
+                    }
+
+                    let newIdx = candidateIndices[cursor]
+                    nextIndexByValue[oldItem] = cursor + 1
+
+                    unchanged.append(news[newIdx])
+                    matchedOldIndices[oldIdx] = true
+                    matchedNewIndices[newIdx] = true
+                }
+
+            var remainingOlds: [Bestandsobjekt] = []
+            remainingOlds.reserveCapacity(olds.count)
+
+            for i in olds.indices where !matchedOldIndices[i] {
+                remainingOlds.append(olds[i])
+            }
+
+            var remainingNews: [Bestandsobjekt] = []
+            remainingNews.reserveCapacity(news.count)
+
+            for i in news.indices where !matchedNewIndices[i] {
+                remainingNews.append(news[i])
+            }
 
             let pairCount = min(remainingOlds.count, remainingNews.count)
 
