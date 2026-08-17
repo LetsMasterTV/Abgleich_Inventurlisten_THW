@@ -38,7 +38,7 @@ struct ColoredDisclosureGroupStyle: DisclosureGroupStyle {
             if configuration.isExpanded {
                 configuration.content
                     .padding(.top, 0) // TODO: Abstand einstellen
-                    .padding(.bottom, 5) //Abstand nach allen Kinder Elementen
+                    .padding(.bottom, 2) //Abstand nach allen Kinder Elementen
             }
         }
     }

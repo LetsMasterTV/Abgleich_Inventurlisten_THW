@@ -172,7 +172,7 @@ struct DiffView: View {
     private var ShowOptionsSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Toggle("Überschriften ausblenden", isOn: Binding(
+                Toggle("Überschriften ausblenden:", isOn: Binding(
                         get: { hideDescriptions },
                         set: { newValue in
                             hideDescriptions = newValue
@@ -180,7 +180,8 @@ struct DiffView: View {
                         }
                     ))
                     .toggleStyle(.switch)
-                Toggle("Unnötige Infos ausblenden", isOn: Binding(
+                    .padding(.horizontal, 4)
+                Toggle("Unnötige Infos ausblenden:", isOn: Binding(
                         get: { hideUnmatchedProperties },
                         set: { newValue in
                             hideUnmatchedProperties = newValue
@@ -188,23 +189,25 @@ struct DiffView: View {
                         }
                     ))
                     .toggleStyle(.switch)
+                    .padding(.horizontal, 4)
                 Spacer()
                 Button {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             showFilters.toggle()
                         }
                             } label: {
-                                Label("Filter", systemImage: (showFilters ? "funnel.fill" : "funnel"))
+                                Label("Filter", systemImage: (showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"))
                             }
+                            .padding(.horizontal, 8)
+                            .fontWeight(showFilters ? .bold : .regular)
                             .font(.caption2)
                             .help("Filter & Optionen ein-/ausklappen")
-                Spacer()
                 Button("▼ Alle", action: expandAll)
                     .font(.caption2)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 2)
                 Button("▲ Keine", action: collapseAll)
                     .font(.caption2)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 2)
             }
             
             if showFilters {

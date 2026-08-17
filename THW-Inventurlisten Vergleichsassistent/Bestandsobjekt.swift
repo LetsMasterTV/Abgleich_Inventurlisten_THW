@@ -76,7 +76,7 @@ import Foundation
         let Ebene: String
         let Ortseinheit: String
         let Art: String
-        let Fremdbeschaft: String
+        let Fremdbeschafft: String
         let Menge_STAN: String
         let Menge_ist: String
         let Verfuegbar: String
@@ -96,7 +96,7 @@ import Foundation
             lhs.Ebene == rhs.Ebene &&
             lhs.Ortseinheit == rhs.Ortseinheit &&
             lhs.Art == rhs.Art &&
-            lhs.Fremdbeschaft == rhs.Fremdbeschaft &&
+            lhs.Fremdbeschafft == rhs.Fremdbeschafft &&
             lhs.Menge_STAN == rhs.Menge_STAN &&
             lhs.Menge_ist == rhs.Menge_ist &&
             lhs.Verfuegbar == rhs.Verfuegbar &&
@@ -117,7 +117,7 @@ import Foundation
             self.Ebene = (dict["Ebene"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Ortseinheit = (dict["OE"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Art = (dict["Art"] ?? "").trimmingCharacters(in: .whitespaces)
-            self.Fremdbeschaft = (dict["FB"] ?? "").trimmingCharacters(in: .whitespaces)
+            self.Fremdbeschafft = (dict["FB"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Menge_STAN = (dict["Menge"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Menge_ist = (dict["Menge Ist"] ?? "").trimmingCharacters(in: .whitespaces)
             self.Verfuegbar = (dict["Verfügbar"] ?? "").trimmingCharacters(in: .whitespaces)
@@ -239,16 +239,16 @@ extension Bestandsobjekt {
         }
 
         compare("Ebene", old.Ebene, new.Ebene)
-        compare("OE", old.Ortseinheit, new.Ortseinheit)
+        compare("Ortseinheit", old.Ortseinheit, new.Ortseinheit)
         compare("Art", old.Art, new.Art)
-        compare("FB", old.Art, new.Art)
+        compare("Fremdbeschafft", old.Fremdbeschafft, new.Fremdbeschafft)
         compare("Menge", old.Menge_STAN, new.Menge_STAN)
         compare("Menge Ist", old.Menge_ist, new.Menge_ist)
         compare("Verfügbar", old.Verfuegbar, new.Verfuegbar)
         compare("Ausstattung | Hersteller | Typ", old.Beschreibung, new.Beschreibung)
         compare("Sachnummer", old.Sachnummer, new.Sachnummer)
-        compare("Inventar Nr", old.Inventarnummer, new.Inventarnummer)
-        compare("Gerätenr.", old.Geraetenummer, new.Geraetenummer)
+        compare("Inventarnummer", old.Inventarnummer, new.Inventarnummer)
+        compare("Gerätenummer.", old.Geraetenummer, new.Geraetenummer)
         compare("Status", old.Status, new.Status)
 
         return changes

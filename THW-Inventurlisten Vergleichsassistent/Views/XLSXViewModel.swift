@@ -221,7 +221,7 @@ class XLSXViewModel {
                 id: node.id,
                 itemkey: node.objekt.key,
                 beschreibung: node.objekt.Beschreibung,
-                fremdbeschaft: node.objekt.Fremdbeschaft,
+                fremdbeschaft: node.objekt.Fremdbeschafft,
                 StatusObjekt: node.objekt.Status,
                 sachnummer: node.objekt.Sachnummer,
                 inventarnummer: node.objekt.Inventarnummer,

@@ -1,5 +1,5 @@
 //
-//  ViewModel.swift
+//  Inventurliste.swift
 //  Abgleich Inventurlisten THW
 //
 //  Created by Kai Sebastian Bühner on 07.07.2026.
@@ -256,13 +256,13 @@ extension Inventurliste {
             return "[\(ebene)] \(item.key)"
         }
 
-        func generierePfadListe(aus elementen: [Bestandsobjekt], parents: [String: Bestandsobjekt]) -> [PfadElement] {
+        func generierePfadListe(aus elementen: [Bestandsobjekt], parents: [UUID: Bestandsobjekt]) -> [PfadElement] {
             let pfade = Self.vollePfade(fuer: elementen, parents: parents, segment: segment)
             return elementen.map { item in
-                PfadElement(vollstaendigerPfad: pfade[item.key] ?? segment(for: item), objekt: item)
+                PfadElement(vollstaendigerPfad: pfade[item.id] ?? segment(for: item), objekt: item)
             }
         }
-
+        
         let altePfade = generierePfadListe(aus: self.inventurliste, parents: parentsOld)
         let neuePfade = generierePfadListe(aus: other.inventurliste, parents: parentsNew)
 
@@ -344,8 +344,8 @@ extension Inventurliste {
 extension Inventurliste {
     /// Ermittelt für jedes Objekt in einer geordneten Liste (Original-Reihenfolge aus der Excel-Datei!)
     /// das nächstgelegene VORHERIGE Objekt mit niedrigerer Ebene – dessen direktes "Elternteil".
-    static func computeParents(for items: [Bestandsobjekt]) -> [String: Bestandsobjekt] {
-        var result: [String: Bestandsobjekt] = [:]
+    static func computeParents(for items: [Bestandsobjekt]) -> [UUID: Bestandsobjekt] {
+        var result: [UUID: Bestandsobjekt] = [:]
         var stack: [(level: Int, obj: Bestandsobjekt)] = []
 
         for item in items {
@@ -354,7 +354,7 @@ extension Inventurliste {
                 stack.removeLast()
             }
             if let parent = stack.last {
-                result[item.key] = parent.obj
+                result[item.id] = parent.obj
             }
             stack.append((level, item))
         }
@@ -367,17 +367,17 @@ extension Inventurliste {
     /// Voraussetzung: Elternteile stehen in `items` vor ihren Kindern (Original-Zeilenreihenfolge).
     static func vollePfade(
         fuer items: [Bestandsobjekt],
-        parents: [String: Bestandsobjekt],
+        parents: [UUID: Bestandsobjekt],
         segment: (Bestandsobjekt) -> String = { $0.key }
-    ) -> [String: String] {
-        var cache: [String: String] = [:]
+    ) -> [UUID: String] {
+        var cache: [UUID: String] = [:]
         cache.reserveCapacity(items.count)
         for item in items {
             let eigenesSegment = segment(item)
-            if let parent = parents[item.key], let parentPath = cache[parent.key] {
-                cache[item.key] = parentPath + "/" + eigenesSegment
+            if let parent = parents[item.id], let parentPath = cache[parent.id] {
+                cache[item.id] = parentPath + "/" + eigenesSegment
             } else {
-                cache[item.key] = eigenesSegment
+                cache[item.id] = eigenesSegment
             }
         }
         return cache

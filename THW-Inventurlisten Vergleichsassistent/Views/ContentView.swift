@@ -67,6 +67,11 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 30) {
                 Spacer()
+                Text("Bitte beide Dateien auswählen")
+                    .foregroundStyle(.primary)
+                    .font(.title)
+                    .bold()
+                Spacer()
                 HStack {
                     Spacer()
                     VStack {
@@ -108,11 +113,7 @@ struct ContentView: View {
                 }
                 
                 
-                Spacer()
-                Text("Bitte beide Dateien auswählen")
-                    .foregroundStyle(.primary)
-                    .font(.title)
-                    .bold()
+               
                 Spacer()
             }
             .padding()

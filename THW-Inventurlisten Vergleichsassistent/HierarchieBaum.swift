@@ -72,7 +72,7 @@ func buildFullHierarchy(
     for item in newItemsSorted {
         // Leere oder ungültige Ebenen werden als Hauptebene (0) gewertet
         let level = Int(item.Ebene) ?? 0
-        let vollerPfad = newPaths[item.key] ?? item.key
+        let vollerPfad = newPaths[item.id] ?? item.key
         let uniqueID = "\(vollerPfad) [Neu:#\(item.Zeile) \(item.key))]"
         
         let node = HierarchyNode(id: uniqueID, objekt: item, status: ermittleStatus(for: item))
@@ -103,7 +103,7 @@ func buildFullHierarchy(
     for item in removedOrdered {
 
         // Bestimme den exakten alten Pfad, an dem das gelöschte Objekt stand
-        let alterVollerPfad = oldPaths[item.key] ?? item.key
+        let alterVollerPfad = oldPaths[item.id] ?? item.key
         let uniqueID = "\(alterVollerPfad) [Alt:#\(item.Zeile) \(item.key)]"
         let node = HierarchyNode(id: uniqueID, objekt: item, status: .removed)
 
@@ -112,8 +112,8 @@ func buildFullHierarchy(
 
         // Finde den Vater-Knoten im neuen Anzeige-Baum über den alten Elternpfad
         var attached = false
-        if let parentObjekt = parentsOld[item.key] {
-            let vaterPfad = oldPaths[parentObjekt.key] ?? parentObjekt.key
+        if let parentObjekt = parentsOld[item.id] {
+            let vaterPfad = oldPaths[parentObjekt.id] ?? parentObjekt.key
 
             // Wenn der Vater im neuen Baum existiert, hänge das gelöschte Objekt dort an
             if let parentNode = nodesByFullPath[vaterPfad] {
