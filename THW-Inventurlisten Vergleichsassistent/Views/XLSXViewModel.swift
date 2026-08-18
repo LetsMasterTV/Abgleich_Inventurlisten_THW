@@ -170,22 +170,16 @@ class XLSXViewModel {
 
     // MARK: - Background Task Management
     private var visibleKeysTask: Task<Void, Never>?
-    private var loadTask: Task<Void, Never>?
     
     // MARK: - Loading
     func load(data: Data, as slot: DocumentSlot) {
-        loadTask?.cancel()
         errorMessage = nil
         
-        loadTask = Task {
             do {
-                let document = try await Task.detached(
-                    priority: .userInitiated
-                ) {
+                let document =
                     try Inventurliste(data: data)
-                }.value
                 
-                guard !Task.isCancelled else { return }
+                
                 switch slot {
                 case .old:
                     oldDocument = document
@@ -197,19 +191,14 @@ class XLSXViewModel {
                     return
                 }
                 
-                let newDiff = try await Task.detached(
-                    priority: .userInitiated
-                ) {
-                    oldDocument.diff(against: newDocument)
-                }.value
+                let newDiff = try oldDocument.diff(against: newDocument)
+              
                 
-                guard !Task.isCancelled else { return }
                 
                 apply(diff: newDiff)
             } catch {
-                guard !Task.isCancelled else { return }
                 errorMessage = "Fehler beim Parsen: \(error.localizedDescription)"
-            }
+            
         }
     }
     // MARK: - Reset
@@ -473,14 +462,15 @@ class XLSXViewModel {
                 result.insert(.urspruenglich)
             case "ÜB":
                 result.insert(.ueberSTAN)
-            case "NV":
-                result.insert(.nichtverfuegbar)
-            case "V":
-                result.insert(.verfuegbar)
             case "T":
                 result.insert(.teilweise)
             case "A":
                 result.insert(.ausgetauscht)
+            case "NV":
+                result.insert(.nichtverfuegbar)
+                break
+            case "V":
+                result.insert(.verfuegbar)
             default:
                 break
             }

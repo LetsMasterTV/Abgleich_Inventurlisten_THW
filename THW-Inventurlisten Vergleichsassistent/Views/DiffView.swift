@@ -41,9 +41,7 @@ struct DiffView: View {
     @State private var expanded: Set<String> = []
     
     // Breadcrumb-Pfad
-    @State private var breadcrumbParts: [String] = []
-    @State private var nodePositions: [String: CGFloat] = [:]
-    @State private var nodeReferences: [String: HierarchyNode] = [:]
+    @State private var tracker = BreadcrumbTracker()
     
     var body: some View {
         VStack(spacing: 0) {
@@ -64,10 +62,9 @@ struct DiffView: View {
             } else {
                 // Sticky Breadcrumb Bar
                 // Sticky Breadcrumb Bar
-                if !breadcrumbParts.isEmpty {
+                if !tracker.breadcrumbParts.isEmpty {
                     breadCrumpSection
                     
-                    Divider()
                 }
                 ScrollSection
             }
@@ -116,6 +113,7 @@ struct DiffView: View {
                     .padding(.top, 10)
                 }
             }
+            .coordinateSpace(name: "scrollSpace")
             .background(Color(.controlBackgroundColor))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .cornerRadius(10)
@@ -140,29 +138,33 @@ struct DiffView: View {
              }}
          .onChange(of: viewModel.selectedFilterRegeln) {
              withTransaction(Transaction(animation: nil)) {
-                 viewModel.scheduleRecomputeVisibleKeysDetached()
+                 viewModel.scheduleRecomputeVisibleKeysDetached(debounceMillis: 0)
              }}
      }
     
  
     private var breadCrumpSection: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(breadcrumbParts.enumerated()), id: \.offset) { index, part in
-                if index > 0 {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.tertiary)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                // Hier greifst du auf tracker.breadcrumbParts zu:
+                ForEach(Array(tracker.breadcrumbParts.enumerated()), id: \.offset) { index, part in
+                    if index > 0 {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                        Text(part)
+                        .font(.caption.weight(index == tracker.breadcrumbParts.count - 1 ? .bold : .regular))
+                        .foregroundStyle(index == tracker.breadcrumbParts.count - 1 ? .primary : .secondary)
+                    }
                 }
-                
-                Text(part)
-                    .font(.caption.weight(index == breadcrumbParts.count - 1 ? .bold : .regular))
-                    .foregroundStyle(index == breadcrumbParts.count - 1 ? .primary : .secondary)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
             }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal)
-        .background(Color(.controlBackgroundColor).opacity(0.5))
-        
+            // Dein ursprünglicher Hintergrund / Effekt 1:1 beibehalten:
+            .background(.tertiary)
+            .padding(.top, 4)
+            .padding(.bottom, -5)
     }
     
     private var ShowOptionsSection: some View {
@@ -274,7 +276,7 @@ struct DiffView: View {
             // Performance-Booster: Schlanken Baum ohne unveränderte Zweige nutzen
             displayedRoots = viewModel.prunedHierarchyRoots
         }
-        breadcrumbParts = []
+        tracker.breadcrumbParts = []
     }
     private func expandAll() {
         var allIds: Set<String> = []
@@ -372,13 +374,10 @@ struct DiffView: View {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named("scrollSpace")).minY
         } action: { newMinY in
-            nodeReferences[node.id] = node
-            nodePositions[node.id] = newMinY
-            updateBreadcrumbFromTracker()
+            tracker.updatePosition(id: node.id, minY: newMinY, node: node)
         }
         .onDisappear {
-            nodePositions.removeValue(forKey: node.id)
-            nodeReferences.removeValue(forKey: node.id)
+            tracker.removeNode(id: node.id)
         }
     }
     
@@ -387,63 +386,6 @@ struct DiffView: View {
 
     // MARK: - Position & Breadcrumb Calculation
     
-    
-    private func updateBreadcrumbFromTracker() {
-        guard !nodePositions.isEmpty else { return }
-
-        var passedID: String?
-        var passedY: CGFloat?
-
-        var nearestID: String?
-        var nearestY: CGFloat?
-
-        for (id, y) in nodePositions {
-            if y <= 20,
-               passedY == nil || y > passedY! {
-                passedID = id
-                passedY = y
-            }
-
-            if nearestY == nil || y < nearestY! {
-                nearestID = id
-                nearestY = y
-            }
-        }
-
-        let topID = passedID ?? nearestID
-
-        guard let topID,
-              let node = nodeReferences[topID] else {
-            return
-        }
-
-        computeBreadcrumb(for: node)
-    }
-    
-    private func computeBreadcrumb(for node: HierarchyNode) {
-        var parts: [String] = []
-        var current: HierarchyNode? = node
-
-        while let currentNode = current {
-            let beschreibung =
-                currentNode.objekt.Beschreibung
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-
-            parts.append(
-                beschreibung.isEmpty
-                    ? currentNode.objekt.key
-                    : beschreibung
-            )
-
-            current = currentNode.parent
-        }
-
-        parts.reverse()
-
-        if breadcrumbParts != parts {
-            breadcrumbParts = parts
-        }
-    }
     
     
     
