@@ -400,7 +400,7 @@ class XLSXViewModel {
 
                 
                 if !activeFilterFlags.isEmpty &&
-                    node.filterFlags.isSuperset(of: activeFilterFlags) {
+                    !node.filterFlags.isSuperset(of: activeFilterFlags) {
                     return false
                 }
                 
