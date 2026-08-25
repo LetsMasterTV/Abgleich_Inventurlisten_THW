@@ -468,7 +468,7 @@ class XLSXViewModel {
                 result.insert(.ausgetauscht)
             case "NV":
                 result.insert(.nichtverfuegbar)
-                break
+                continue
             case "V":
                 result.insert(.verfuegbar)
             default:
