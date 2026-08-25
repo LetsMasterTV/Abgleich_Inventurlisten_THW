@@ -1,5 +1,5 @@
 //
-//  Abgleich_Inventurlisten_THWApp.swift
+//  THW-Inventur Vergleichsassistentswift
 //  Abgleich Inventurlisten THW
 //
 //  Created by Kai Sebastian Bühner on 07.07.2026.
