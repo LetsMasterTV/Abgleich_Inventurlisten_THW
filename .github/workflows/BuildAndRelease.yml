@@ -1,33 +1,33 @@
 name: Build & Release macOS
-
+ 
 on:
   push:
     branches:
       - main
-
+ 
 permissions:
   contents: write
-
+ 
 concurrency:
   group: release-main
   cancel-in-progress: true
-
+ 
 jobs:
   build:
     runs-on: macos-latest
-
+ 
     env:
       PROJECT: "Abgleich Inventurlisten THW.xcodeproj"
-
+ 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+ 
       - name: Show Environment
         run: |
           xcodebuild -version
           sw_vers
-
+ 
       - name: Cache Swift Packages
         uses: actions/cache@v4
         with:
@@ -37,7 +37,7 @@ jobs:
           key: swiftpm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             swiftpm-${{ runner.os }}-
-
+ 
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
@@ -45,7 +45,7 @@ jobs:
           key: deriveddata-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             deriveddata-${{ runner.os }}-
-
+ 
       - name: Detect Scheme
         id: detect
         shell: bash
@@ -54,16 +54,16 @@ jobs:
             -project "$PROJECT" \
             -list -json \
             | ruby -rjson -e 'puts JSON.parse(STDIN.read)["project"]["schemes"][0]')
-
+ 
           echo "Projekt: $PROJECT"
           echo "Scheme : $SCHEME"
-
+ 
           echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-
+ 
       - name: Build
         run: |
           rm -rf build
-
+ 
           xcodebuild \
             -project "$PROJECT" \
             -scheme "${{ steps.detect.outputs.scheme }}" \
@@ -71,56 +71,77 @@ jobs:
             -sdk macosx \
             -derivedDataPath build \
             clean build
-
+ 
       - name: Locate App
         id: app
         shell: bash
         run: |
           APP=$(find build -name "*.app" | head -1)
-
+ 
           if [ -z "$APP" ]; then
             echo "::error::Keine App gefunden."
             exit 1
           fi
-
+ 
           NAME=$(basename "$APP" .app)
-
+ 
           echo "Gefundene App:"
           echo "$APP"
-
+ 
           echo "app=$APP" >> $GITHUB_OUTPUT
           echo "name=$NAME" >> $GITHUB_OUTPUT
-
+ 
+      - name: Locate Icon
+        id: icon
+        shell: bash
+        run: |
+          ICON=$(find "${{ steps.app.outputs.app }}/Contents/Resources" -name "*.icns" | head -1)
+ 
+          if [ -z "$ICON" ]; then
+            echo "::warning::Kein .icns Icon gefunden, DMG wird ohne --volicon erstellt."
+          else
+            echo "Gefundenes Icon:"
+            echo "$ICON"
+          fi
+ 
+          echo "icon=$ICON" >> $GITHUB_OUTPUT
+ 
       - name: Create ZIP
         run: |
           mkdir -p release
-
+ 
           ditto -c -k --sequesterRsrc --keepParent \
             "${{ steps.app.outputs.app }}" \
             "release/${{ steps.app.outputs.name }}-V 1.0.${{ github.run_number }}.zip"
-
+ 
       - name: Install create-dmg
         run: |
           brew update
           brew install create-dmg
-
+ 
       - name: Create DMG
         run: |
+          ICON_FLAG=()
+          if [ -n "${{ steps.icon.outputs.icon }}" ]; then
+            ICON_FLAG=(--volicon "${{ steps.icon.outputs.icon }}")
+          fi
+ 
           create-dmg \
             --volname "${{ steps.app.outputs.name }}" \
             --window-pos 200 120 \
             --window-size 800 450 \
             --icon-size 120 \
             --app-drop-link 600 220 \
+            "${ICON_FLAG[@]}" \
             "release/${{ steps.app.outputs.name }}-V 1.0.${{ github.run_number }}.dmg" \
             "${{ steps.app.outputs.app }}"
-
+ 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macOS-Build-${{ github.run_number }}
           path: release/*
-
+ 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -128,13 +149,13 @@ jobs:
           name: "Latest Build (${{ github.run_number }})"
           body: |
             ## Aktuelle Version von Abgleich Inventurlisten THW
-
+ 
             Hauptseite mit Anleitung: https://github.com/LetsMasterTV/Abgleich_Inventurlisten_THW
-
+ 
             **Build:** ${{ github.run_number }}
-
+ 
             **Commit:** ${{ github.sha }}
-
+ 
             Dieser Release wird bei jedem Push auf `main` automatisch aktualisiert.
           prerelease: true
           make_latest: true
@@ -142,13 +163,13 @@ jobs:
           files: |
             release/*.zip
             release/*.dmg
-
+ 
       - name: Delete Old Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
           name: macOS-Build-*
           failOnError: false
-
+ 
       - name: Delete Older Releases
         uses: dev-drprasad/delete-older-releases@v0.3.3
         with:
